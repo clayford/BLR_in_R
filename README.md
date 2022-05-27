@@ -1,2 +1,3 @@
-# BLR_in_R
-Binary Logistic Regression in R workshop materials - Fall 2022
+# Binary Logistic Regression in R
+
+Workshop materials for Fall 2022
