@@ -129,3 +129,107 @@ exp(coef(m)["distance"])
 # plot predicted probability
 library(ggeffects)
 plot(ggpredict(m, terms = "distance[all]"))
+
+
+
+# intercept only ----------------------------------------------------------
+
+
+d <- rbinom(n = 100, size = 1, prob = 0.4)
+mean(d)
+table(d) |> proportions()
+prop.test(x = 37, n = 100)
+
+m0 <- lm(d ~ 1)
+summary(m0)
+m <- glm(d ~ 1, family = binomial)
+summary(m)
+confint(m)
+
+plogis(coef(m))
+plogis(confint(m))
+
+
+
+# SoreThroat --------------------------------------------------------------
+
+
+st <- read.table("data/SoreThroat.dat", header = TRUE)
+names(st) <- c("duration", "device", "sore")
+st$device <- factor(st$device, labels = c("mask", "tube"))
+st$soreF <- factor(st$sore, labels = c("no", "yes"))
+summary(st$duration)
+summary(st$device)
+summary(st$soreF)
+
+xtabs(~ soreF, data = st) |> 
+  proportions()
+xtabs(~ device + soreF, data = st) |> 
+  proportions(margin = 1) |> round(2)  # 0.78 vs 0.47
+
+# 0.78 vs 0.47: is that difference "significant"?
+prop.test(x = c(14, 8), n = c(18, 17), correct = FALSE)
+
+# the probability of seeing a difference bigger than that if there truly is no
+# difference is about 0.06.
+
+lrm1 <- glm(soreF ~ device, data = st, family = binomial)
+summary(lrm1)
+predict(lrm1, newdata = data.frame(device = c("mask", "tube")), 
+        type = "response")
+
+stripchart(duration ~ soreF, data = st, method = "jitter")
+
+library(ggplot2)
+ggplot(st) +
+  aes(x = duration, y = soreF, color = device) +
+  geom_jitter(width = 0, height = 0.1)
+
+m0 <- glm(sore ~ 1, data = st, family = binomial)
+summary(m0)
+predict(m0, type = "response")
+
+m <- glm(sore ~ duration + device, data = st, family = binomial)
+summary(m)
+exp(coef(m))
+
+m2 <- glm(sore ~ duration + device + duration:device, 
+         data = st, family = binomial)
+summary(m2)
+
+library(ggeffects)
+plot(ggpredict(m, terms = c("duration", "device")))
+plot(ggpredict(m2, terms = c("duration", "device")))
+
+
+
+# logit -------------------------------------------------------------------
+
+lm1 <- lm(sore ~ duration, data = st)
+summary(lm1)
+head(predict(lm1)) # predicted value greater than 1 at obs 5
+
+# would like predictions in range of 0-1
+prob <- seq(0.001, 0.999, 0.001)
+prob
+
+# logit (log odds)
+odds <- prob/(1 - prob)
+logodds <- log(odds)
+summary(prob)  # ranges 0 - 1
+summary(logodds) # ranges -Inf - +Inf
+
+# qlogis() takes log odds
+summary(qlogis(prob))
+
+# logistic regression returns results on the log odds scale
+glm1 <- glm(sore ~ duration, data = st, family = binomial)
+summary(glm1)
+head(predict(glm1))
+
+# need to take inverse of log odds to get probability
+# plogis is inverse logit
+plogis(head(predict(glm1)))
+head(predict(glm1, type = "response"))
+
+qlogis(plogis(head(predict(glm1))))
