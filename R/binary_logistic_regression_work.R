@@ -233,3 +233,19 @@ plogis(head(predict(glm1)))
 head(predict(glm1, type = "response"))
 
 qlogis(plogis(head(predict(glm1))))
+
+
+placekick <- read.csv('../../jcf2d/OneDrive - University of Virginia/_Statistics/ACD_with_R/all_programs_data/Chapter2/Placekick.csv')
+
+# Find the observed proportion of successes at each distance
+w <- aggregate(good ~ distance, data = placekick, FUN = sum)
+n <- aggregate(good ~ distance, data = placekick, FUN = length)
+placekick2 <- data.frame(distance = w$distance, 
+                         success = w$good, 
+                         trials = n$good, 
+                         proportion = round(w$good/n$good,4))
+head(w.n)
+tail(w.n)
+
+mod.fit.bin<-glm(formula = success/trials ~ distance, weights = trials, family = binomial(link = logit), data = w.n, trace = TRUE)
+summary(mod.fit.bin) 
