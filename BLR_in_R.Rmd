@@ -1,0 +1,206 @@
+---
+title: "Binary Logistic Regression in R"
+author: "Clay Ford, UVA Library"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+This is an R Markdown Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter* (Win/Linux) or *Cmd+Shift+Return* (Mac). 
+
+```{r}
+plot(cars)
+```
+
+To hide the output, click the Expand/Collapse output button. To clear results (or an error), click the "x". 
+
+You can also press *Ctrl+Enter* (Win/Linux) or *Cmd+Return* (Mac) to run one line of code at a time (instead of the entire chunk).
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).  
+
+## CODE ALONG 0
+
+Enter a new code chunk and run the code `rbinom(n = 10, size = 1, prob = 0.5)` (sample 10 random values from a binomial distribution, ie flip a fair coin 10 times)
+
+```{r}
+rbinom(n = 10, size = 1, prob = 0.5)
+```
+
+## Proportions and Probability
+
+What is the probability a UVA student has a tattoo? This is a _binary_ response. Only two possible answers: yes or no. We don't know, so we take a random sample. Let's say we randomly sample 100 students and find that 15 students have tattoos. 
+
+The _proportion_, 15/100 = 0.15, can be interpreted as an estimated _probability_ that a UVA student has a tattoo. Recall that proportions and probabilities range from 0 to 1. We might conclude about 15% of UVA students have tattoos, or there's a probability of about 0.15 that a randomly selected UVA student has a tattoo.
+
+What if we sampled 100 males and 100 females and compared the proportion with tattoos? This implies the probability of having a tattoo may be related to sex.
+
+What if we also collected other information such as cumulative GPA or Greek life (yes or no)? Again this implies the probability of having a tattoo may be related to multiple _variables_ or _predictors_.
+
+_Binary Logistic Regression_ is a method that allows us to investigate questions such as this. It allows us to _model the probability_ of a binary event given multiple predictors.
+
+## Load Data for the workshop
+
+Today we'll work with data on Intensive Care Unit (ICU) admissions. This data are a sample of 200 subjects who were part of a much larger study on survival of patients following admission to an adult intensive care unit (ICU), derived from Hosmer, Lemeshow and Sturdivant (2013) and included with the vcdExtra package, Friendly (2022).
+
+```{r}
+icu <- readRDS(file = "data/icu.rds")
+```
+
+The goal today is to teach the basics of Binary Logistic Regression by developing a model to predict the probability of survival and to study the risk factors associated with ICU mortality. 
+
+_List of variables_
+
+- died: Died before discharge? (No or Yes)
+- age: Patient age
+- sex: Patient sex (Female or Male)
+- cancer: Cancer part of present problem? (No or Yes)
+- systolic: Systolic blood pressure at admission (mm Hg)
+- admit: Type of admission (Elective or Emergency)
+- ph: pH from initial blood gases (>=7.25 or <7.25)
+- pco: partial pressure of carbon dioxide (PCO2) (<=45 or >45)
+- uncons: patient unconscious at admission? (No or Yes)
+
+## Explore the ICU Data
+
+The response variable is "died"
+
+```{r}
+table(icu$died, useNA = "ifany")
+```
+
+We can get the proportion of each category by using the `proportions` function. Notice we can "pipe" result of table into `proportions` using the base R pipe operator, `|>`
+
+```{r}
+table(icu$died) |> proportions()
+```
+
+Just based on this information, a naive estimate of the probability of death (Yes) after admission to the ICU is about 20%. But this probability estimate may change based on other predictors such as patient age, sex, whether or not patient was conscious at ICU admission, etc.
+
+How is being unconscious at time of admission to ICU affect proportion of deaths? This time we use `xtabs()` to create a cross tabulation, and then pipe into `proportions()` with `margin = 1` to specify we want to calculate proportions for the rows. In other words, find proportion of `died` conditional on `uncons`. Of those who were unconscious at admission about 87% died. But only 15 out of 200 people were unconscious at admission.
+
+```{r}
+xtabs(~ uncons + died, data = icu) |>
+  proportions(margin = 1) |>
+  round(3)
+```
+
+How does age relate to the proportion of died? Plotting a factor as a function of a numeric variable using `plot()` creates a _spineplot_. The x-axis groups age into categories. Each vertical box shows the proportion of died within each age category. The width of the box corresponds to the proportion of age categories. Age 60 - 70 appears to be the largest group. It appears the proportion of deaths creeps up with increasing age.
+
+```{r}
+plot(died ~ age, data = icu)
+```
+
+## CODE ALONG 1
+
+- create a cross tabulation of admit and died
+- Plot `died` as a function of `systolic`.
+
+
+## Binary Logistic Regression basics
+
+The result of a binary logistic regression is a _model_ that we can use to make probability predictions or quantify relationships. For example, with the ICU data we might...
+
+- predict probability of death given age, sex, and whether you were unconscious at admission
+- determine how much the probability of dying increases (or decreases) if you were unconscious at admission
+
+_We are responsible for proposing and assessing the model_! For example, the "sex" variable may or may not help our model. We have to decide to retain it or drop it.
+
+One way to fit binary logistic regression models in R is with the `glm()` function. GLM = Generalized Linear Model.
+
+Let's fit a model. Notice we must set `family = binomial` because our response is binary. We almost always want to save the model result. The formula says "model `died` as a function of `age`, `sex`, and `uncons`." Call `summary()` on the model object to see the result.
+
+```{r}
+m <- glm(died ~ age + sex + uncons, data = icu, family = binomial)
+summary(m)
+```
+
+The model is in the Estimate column of the coefficients section.
+
+$$\text{died} = -3.58 + 0.02\text{age} + 0.14\text{sex} + 3.6\text{uncons}$$
+
+If we plug in values for `age`, `sex`, and `uncons` we get _predicted log odds_ of dying. Log odds are also known as _logit_ values. 
+
+Let's make a prediction for a male age 70 who was unconscious at admission. We use the `predict()` function with a data frame containing our predictors.
+
+```{r}
+predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"))
+```
+
+The log odds is hard to interpret because it can take values from -Inf to +Inf. To get probability we need to take the _inverse logit_, which converts log odds to the probability scale. Fortunate we can just set `type = "response"` in the `predict()` function.
+
+```{r}
+predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"), 
+        type = "response")
+```
+
+We predict a very high probability of dying given you're a 70 year old male who was unconscious at admission to the ICU.
+
+Again we should assess this model and think carefully before we fall in love with our prediction!
+
+## How to interpret coefficients
+
+Our model is comprised of simple additive predictors (ie, _main effects_). Therefore the coefficients can be interpreted. We can use the `coef()` function to extract the coefficients.
+
+```{r}
+coef(m)
+```
+
+Again these coefficients are on the log odds scale. If we exponentiate them we get _odds ratios_. An odds ratio is a ratio of two odds.
+
+Odds are not the same as probability. 
+
+Let's say an event has a probability of 0.8 of happening. The corresponding odds are 4, or 4 to 1. We can expect 4 "successes" for every one "failure". 
+
+```{r}
+# event 1
+p1 <- 0.8
+odds1 <- p1/(1-p1)
+odds1
+```
+
+Let's say another event has a probability of 0.6 of happening. The corresponding odds are 1.5.
+
+```{r}
+# event 2
+p2 <- 0.6
+odds2 <- p2/(1-p2)
+odds2
+
+```
+
+The odds ratio of the two events is 4/1.5, which is about 2.7. 
+
+```{r}
+odds1/odds2
+```
+
+This says the odds of event 1 are about 2.7 times higher than the odds of event 2.
+
+Let's look at the odds ratios of our model:
+
+```{r}
+exp(coef(m))
+```
+
+It appears the odds of dying when unconscious are about 36 times higher than the odds of dying when you are not unconscious. We can calculate this "by hand" by predicting probabilities for two people, one who was unconscious and the other who was not:
+
+```{r}
+p1 <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
+                                      uncons = "Yes"),
+              type = "response")
+p2 <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
+                                      uncons = "No"),
+              type = "response")
+# odds ratio
+or <- (p1/(1-p1)) / (p2/(1-p2))
+cbind(p1, p2, or)
+```
+
+
+
+## References
+
+- Friendly M (2022). _vcdExtra: 'vcd' Extensions and Additions_. R package version 0.8-0, <https://CRAN.R-project.org/package=vcdExtra>.
+- Lemeshow, S., Teres, D., Avrunin, J. S., Pastides, H. (1988). Predicting the Outcome of Intensive Care Unit Patients. Journal of the American Statistical Association, 83, 348-356.
