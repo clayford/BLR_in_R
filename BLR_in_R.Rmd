@@ -28,9 +28,19 @@ Enter a new code chunk and run the code `rbinom(n = 10, size = 1, prob = 0.5)` (
 rbinom(n = 10, size = 1, prob = 0.5)
 ```
 
+## Load packages
+
+```{r}
+library(vcdExtra)
+library(car)
+library(effects)
+library(ggeffects)
+```
+
+
 ## Proportions and Probability
 
-What is the probability a UVA student has a tattoo? This is a _binary_ response. Only two possible answers: yes or no. We don't know, so we take a random sample. Let's say we randomly sample 100 students and find that 15 students have tattoos. 
+Pick a UVA student at random. What is the probability they have a tattoo? This is a _binary_ response. Only two possible answers: yes or no. We don't know, so we take a random sample. Let's say we randomly sample 100 students and find that 15 students have tattoos. 
 
 The _proportion_, 15/100 = 0.15, can be interpreted as an estimated _probability_ that a UVA student has a tattoo. Recall that proportions and probabilities range from 0 to 1. We might conclude about 15% of UVA students have tattoos, or there's a probability of about 0.15 that a randomly selected UVA student has a tattoo.
 
@@ -40,15 +50,22 @@ What if we also collected other information such as cumulative GPA or Greek life
 
 _Binary Logistic Regression_ is a method that allows us to investigate questions such as this. It allows us to _model the probability_ of a binary event given multiple predictors.
 
+Statistical modeling boils down to 3 steps:
+
+1. propose and fit a model
+2. assess if model is good
+3. use model to make predictions, quantify relationships, or provide advice
+
 ## Load Data for the workshop
 
-Today we'll work with data on Intensive Care Unit (ICU) admissions. This data are a sample of 200 subjects who were part of a much larger study on survival of patients following admission to an adult intensive care unit (ICU), derived from Hosmer, Lemeshow and Sturdivant (2013) and included with the vcdExtra package, Friendly (2022).
+Today we'll work with data on Intensive Care Unit (ICU) admissions. This data are a sample of 200 subjects who were part of a much larger study on survival of patients following admission to an adult ICU, derived from Hosmer, Lemeshow and Sturdivant (2013) and included with the vcdExtra package, Friendly (2022).
 
 ```{r}
 icu <- readRDS(file = "data/icu.rds")
+names(icu)
 ```
 
-The goal today is to teach the basics of Binary Logistic Regression by developing a model to predict the probability of survival and to study the risk factors associated with ICU mortality. 
+The goal today is to teach the basics of Binary Logistic Regression by developing a model to predict the probability of survival after admission to this ICU and to study the risk factors associated with ICU mortality. 
 
 _List of variables_
 
@@ -64,21 +81,21 @@ _List of variables_
 
 ## Explore the ICU Data
 
-The response variable is "died"
+The response variable is "died". Let's count the responses using the `xtabs()` function. The argument `addNA = TRUE` reports missing values if any are present.
 
 ```{r}
-table(icu$died, useNA = "ifany")
+xtabs(~ died, data = icu, addNA = TRUE)
 ```
 
-We can get the proportion of each category by using the `proportions` function. Notice we can "pipe" result of table into `proportions` using the base R pipe operator, `|>`
+We can get the proportion of each category by using the `proportions()` function. Notice we can "pipe" the result of `xtabs()` into `proportions()` using the base R pipe operator, `|>`
 
 ```{r}
-table(icu$died) |> proportions()
+xtabs(~ died, data = icu) |> proportions()
 ```
 
 Just based on this information, a naive estimate of the probability of death (Yes) after admission to the ICU is about 20%. But this probability estimate may change based on other predictors such as patient age, sex, whether or not patient was conscious at ICU admission, etc.
 
-How is being unconscious at time of admission to ICU affect proportion of deaths? This time we use `xtabs()` to create a cross tabulation, and then pipe into `proportions()` with `margin = 1` to specify we want to calculate proportions for the rows. In other words, find proportion of `died` conditional on `uncons`. Of those who were unconscious at admission about 87% died. But only 15 out of 200 people were unconscious at admission.
+How does being unconscious at time of admission to ICU affect proportion of deaths? This time we use `xtabs()` to create a cross tabulation, and then pipe into `proportions()` with `margin = 1` to specify we want to calculate proportions for the rows. In other words, find proportion of `died` conditional on `uncons`. Of those who were unconscious at admission about 87% died. But only 15 out of 200 people were unconscious at admission.
 
 ```{r}
 xtabs(~ uncons + died, data = icu) |>
@@ -100,7 +117,7 @@ plot(died ~ age, data = icu)
 
 ## Binary Logistic Regression basics
 
-The result of a binary logistic regression is a _model_ that we can use to make probability predictions or quantify relationships. For example, with the ICU data we might...
+Binary logistic regression produces a _model_ that we can use to make probability predictions or quantify relationships. For example, with the ICU data we might...
 
 - predict probability of death given age, sex, and whether you were unconscious at admission
 - determine how much the probability of dying increases (or decreases) if you were unconscious at admission
@@ -116,11 +133,13 @@ m <- glm(died ~ age + sex + uncons, data = icu, family = binomial)
 summary(m)
 ```
 
-The model is in the Estimate column of the coefficients section.
+The model is in the Estimate column of the coefficients section. Here's the model expressed in basic math notation:
 
-$$\text{died} = -3.58 + 0.02\text{age} + 0.14\text{sex} + 3.6\text{uncons}$$
+$$\text{died} = -3.58 + 0.02\text{ age} + 0.14\text{ sex} + 3.6\text{ uncons}$$
 
-If we plug in values for `age`, `sex`, and `uncons` we get _predicted log odds_ of dying. Log odds are also known as _logit_ values. 
+If we plug in values for `age`, `sex`, and `uncons` we get _predicted log odds_ of dying, not probability. 
+
+Log odds are also known as _logit_ values. The logit transformation takes probability, which ranges from [0,1], and expresses it as log odds, which ranges from [-Inf,+Inf]. This is desirable since modeling probability directly could produce predictions below 0 or above 1.
 
 Let's make a prediction for a male age 70 who was unconscious at admission. We use the `predict()` function with a data frame containing our predictors.
 
@@ -128,7 +147,7 @@ Let's make a prediction for a male age 70 who was unconscious at admission. We u
 predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"))
 ```
 
-The log odds is hard to interpret because it can take values from -Inf to +Inf. To get probability we need to take the _inverse logit_, which converts log odds to the probability scale. Fortunate we can just set `type = "response"` in the `predict()` function.
+The prediction, 2.145, is hard to interpret. To get probability we need to take the _inverse logit_, which converts log odds back to the probability scale. Fortunately we can just set `type = "response"` in the `predict()` function.
 
 ```{r}
 predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"), 
@@ -139,6 +158,21 @@ We predict a very high probability of dying given you're a 70 year old male who 
 
 Again we should assess this model and think carefully before we fall in love with our prediction!
 
+## Odds versus Probability
+
+Odds equal p/(1-p).   
+Log odds is log(odds). 
+
+Let's convert a few probabilities to odds and log odds. The function `fractions()` from the MASS package returns fractions, which is usually how odds are expressed. We use `as.character()` to print the fraction bar.
+
+```{r}
+p <- c(0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999)
+odds <- MASS::fractions(p/(1-p))
+logodds <- log(odds)
+data.frame(p, odds = as.character(odds), logodds)
+```
+
+
 ## How to interpret coefficients
 
 Our model is comprised of simple additive predictors (ie, _main effects_). Therefore the coefficients can be interpreted. We can use the `coef()` function to extract the coefficients.
@@ -148,8 +182,6 @@ coef(m)
 ```
 
 Again these coefficients are on the log odds scale. If we exponentiate them we get _odds ratios_. An odds ratio is a ratio of two odds.
-
-Odds are not the same as probability. 
 
 Let's say an event has a probability of 0.8 of happening. The corresponding odds are 4, or 4 to 1. We can expect 4 "successes" for every one "failure". 
 
@@ -166,8 +198,7 @@ Let's say another event has a probability of 0.6 of happening. The corresponding
 # event 2
 p2 <- 0.6
 odds2 <- p2/(1-p2)
-odds2
-
+odds2  # 3/2
 ```
 
 The odds ratio of the two events is 4/1.5, which is about 2.7. 
@@ -197,6 +228,254 @@ p2 <- predict(m, newdata = data.frame(age = 60, sex = "Male",
 or <- (p1/(1-p1)) / (p2/(1-p2))
 cbind(p1, p2, or)
 ```
+
+The odds ratio for age is about 1.03. This says the odds of dying increase about 3% for every 1 year increase in age. If we wanted to estimate that for every 10 years increase in age, we simply multiply the coefficient by 10.
+
+```{r}
+exp(coef(m)["age"] * 10)
+```
+
+Every 10 year increase in age increases the odds of dying by about 33%.
+
+## Standard errors and hypthesis tests
+
+If we use `coef()` on `summary()` we extract the coefficient table which contains standard errors, test statistics (z value), and p-values.
+
+- Std. Error: quantifies uncertainty of estimated coefficient. It may help to imagine adding and subtracting it to your estimate to get an idea of the variability of your estimate.
+- z value: Estimate/Std. Error. It's a ratio. Large ratios mean coefficients with small standard errors. z values larger than 3 are usually considered "big"
+- Pr(>|z|): probability of getting a z value as big or bigger if coefficient is 0, given other predictors already in model
+
+Altogether this information is used to assess whether predictor coefficients are reliably positive or negative (ie, different from 0)
+
+```{r}
+coef(summary(m))
+```
+
+Another way to assess direction and magnitude of coefficients is with confidence intervals. Use `confint()` on the model object.
+
+```{r}
+confint(m)
+```
+
+We're not sure if being Male increases or decreases the chance of dying.
+
+Using `exp()` with `confint()` provides a confidence interval on the odds ratios. Of interest here is whether or not the CI crosses 1. A ratio of 1 implies no difference in odds.
+
+```{r}
+exp(confint(m))
+```
+
+## Code along 2
+
+- Model died as a function of age, cancer, admit and uncons. Save the model as `m2`.
+- Use `summary()` and `confint()` on the model
+- Interpret the coefficient for admit as an odds ratio
+- What's the predicted probability of dying for a person age 50 with cancer, Emergency admission, and unconscious?
+
+```{r}
+m2 <- glm(died ~ age + cancer + admit + uncons, data = icu, 
+          family = binomial)
+summary(m2)
+confint(m2)
+```
+
+```{r}
+predict(m2, newdata = data.frame(age = 50, cancer = "Yes", 
+                                 admit = "Emergency", uncons = "Yes"),
+        type = "response")
+```
+
+## Model assessment
+
+It's easy to use `glm()` to fit a binary logistic model, but is the model "good"? Is one model better than another? How do we know which predictors to keep and which ones to drop? Should we allow interactions or non-linear transformations? _Model building is hard_ and requires equal parts statistical expertise and subject matter expertise. 
+
+One question to consider: _is our model better than the NULL model_, where the NULL model is simply the proportion of "successes". Recall 20% of the patients admitted to the ICU died.
+
+```{r}
+# proportion of died = "Yes"
+mean(icu$died == "Yes")
+```
+
+The NULL model is simply predicting anyone admitted to the ICU has a 20% chance of dying. This is sometimes called the _intercept-only model_, which we can fit as follows:
+
+```{r}
+# died ~ 1 is the intercept-only model
+m0 <- glm(died ~ 1, data = icu, family = binomial)
+coef(m0)
+```
+
+The intercept coefficient is the predicted log odds of dying. We can convert log odds to probability using the inverse logit, which is available as the `plogis()` function:
+
+```{r}
+# convert log odds to probability
+plogis(coef(m0))
+```
+
+We can formally assess if a proposed model is better than the NULL model using the `anova()` function. Recall our model `m`
+
+```{r}
+formula(m)
+```
+
+How much better is it than the NULL model? Call `anova()` with `test = "Chisq"`:
+
+```{r}
+anova(m, test = "Chisq")
+```
+
+Notice that terms are added sequentially, _in order_. This is sometimes called a _Type I test_.
+
+- A model with just age appears to be better than the NULL model. 
+- Adding sex with age already in the model doesn't seem to make any further improvement. 
+- Adding uncons with age and sex already in the model further improves the model quite a bit. Notice the drop in _Residual Deviance_. 
+
+Deviance is a statistical summary of model fit. A "good" predictor should drop Residual Deviance by more than 1. Notice sex produces no change in deviance, but uncons drops it more than 30.
+
+An alternative to Type I tests are _Type II tests_, which test the contribution of each variable assuming all others are included. The `Anova()` function from the car package produces Type II tests. This technically does not compare the model to the NULL model. However it does allow us to asses each variable's contribution to the model.
+
+```{r}
+Anova(m)
+```
+
+The substance of the results are largely the same, however each test assumes the other variables are in the model. For example, adding age to a model with sex and uncons already present appears to improve the model.
+
+A second question to consider: _how bad is our model compared to a saturated model that fits the data perfectly_? The `LRstats()` function from the vcdExtra package helps us to assess this question. It conducts a hypothesis test with the Null being "the model fit is no different from the saturated model". A low p-value provides evidence against this hypothesis.
+
+```{r}
+LRstats(m)
+```
+
+The result of this test fails to provide evidence against the Null. 
+
+## Code along 3
+
+Assess model `m2` using the methods we just described.
+
+```{r}
+anova(m2, test = "Chisq")
+```
+
+```{r}
+LRstats(m)
+```
+
+## Fitting more complex models
+
+So far our models only contain _main effects_. The effects are _additive_. It doesn't matter what age you are, the effect of uncons is the same. The effect of age is also constant. The effect of age going from 20 to 21 is the same as the age going from 75 to 76.
+
+We can relax that assumption by allowing variables to _interact_ and to allow variables to have _non-linear_ effects. These make our models more complex and more difficult to interpret. But they also may produce better models that more accurately explain the probability of our response.
+
+**Interactions:** Below we allow age and uncons to interact by adding `age:uncons` to the model. The interaction itself does not seem necessary according to the summary output.
+
+```{r}
+m_int <- glm(died ~ age + sex + uncons + age:uncons, data = icu,
+             family = binomial)
+summary(m_int)
+```
+
+**Non-linear effects:** Below we allow age to have a non-linear effect by fitting a 2nd-degree polynomial using `poly(age, 2)`.
+
+```{r}
+m_poly <- glm(died ~ poly(age, 2) + sex + uncons, data = icu,
+             family = binomial)
+summary(m_poly)
+```
+
+It's hard to tell if the polynomial is necessary. One way to assess this is using the `Anova()` function from the car package.
+
+```{r}
+Anova(m_poly)
+```
+
+It looks like it may be worth modeling age as a non-linear effect.
+
+## Visualizing models
+
+Adding interactions and/or non-linear terms make model interpretation extremely difficult. One way to make sense of your model is to use _effect displays_, or _effect plots_. 
+
+The basic idea is to pick a variable of interest, say age, and make predictions for it over a range of values while holding other predictors constant.
+
+Below we show two ways to do this using the effects and ggeffects packages. 
+
+First visualize `m_poly` using `Effect()` from the effects package. Notice we can pipe the result into `plot()`. The light blue ribbon is a 95% confidence band. The little ticks at the bottom are the observed values. Notice the ribbon gets larger (more uncertain) when we have fewer observations, which we see in the extremes of the data. It appears the effect of age doesn't change until after about age 55, and then it begins to increase.
+
+```{r}
+Effect("age", mod = m_poly) |> plot()
+```
+
+We can make a similar plot using `ggpredict()` from the ggeffects package. Again we can pipe the result into `plot()`. The main difference is that ggeffects uses ggplot2 to create the plots. 
+
+```{r}
+ggpredict(model = m_poly, terms = "age") |> plot()
+```
+
+Another difference between `Effect()` and `ggpredict()` is what values the other predictors are held fixed at. 
+
+- The `Effect()` holds sex and uncons at the proportion of sex=Male and uncons=Yes, respectively (0.62 and 0.075). 
+- The `ggpredict()` function holds sex and uncons at their most common values, Female and No.
+
+That's why the position of the curve is different in the plots, though more importantly, _the shape is the same_. 
+
+
+Next, we visualize m_int which models an interaction between age and uncons. This allows the effect of uncons to depend on age, and vice versa. Using `Effect()`, we specify both variables as the focal predictors. The first variable will be plotted on the x-axis.
+
+```{r}
+Effect(focal.predictors = c("age", "uncons"), mod = m_int) |>
+  plot()
+```
+
+There is a great deal of uncertainty about the effect of age when a patient is unconscious. That's because of the 200 patients, only 15 were admitted unconscious. And no one under the age of 40 was unconscious when admitted to the ICU.
+
+We create the same plot using `ggpredict()` with a vector of predictors as well. Notice this plot looks much different!
+
+```{r}
+ggpredict(model = m_int, terms = c("age", "uncons")) |>
+  plot()
+```
+
+The `Effect()` is on the log odds scale, but labeled with probability. The `ggpredict()` plot is on the probability scale.
+
+
+
+## Comparing models
+
+We can compare models by using criteria such as AIC and BIC as well as hypothesis tests. Let's review both.
+
+AIC and BIC are statistics for measuring goodness of fit. In isolation these values are not meaningful, but when compared for different models with the same response, _lower values are better_. The `LRstats` function shows both criteria. Let's compare models `m` and `m2`:
+
+```{r}
+LRstats(m, m2)
+```
+
+Even though both models appear to be just as good as a saturated model, `m2` appears to better than `m`.
+
+When one model is _nested_ in another, we can use hypothesis tests to assess whether the simpler model is just as good as the more complex model. Let's fit two models, one nested in the other.
+
+Model 1: age and uncons  
+Model 2: age, uncons and their interaction
+
+Model 2 says the effect of age depends on uncons and vice versa. Model 1 is nested within Model 2 since it's a special case of Model 2 with an interaction coefficient of 0.
+
+```{r}
+m3 <- glm(died ~ age + uncons, data = icu, family = binomial)
+m4 <- glm(died ~ age + uncons + age:uncons, data = icu, family = binomial)
+```
+
+Now we can carry out a formal test to compare the models using the `anova()` function. The null hypothesis is both models fit equally well. A low p-value provides evidence against the null.
+
+```{r}
+anova(m3, m4, test = "Chisq")
+```
+
+The interaction may be useful but is probably small. Whether or not to keep it is just as much a subject matter question as it is a statistical one. Comparing AIC and BIC values is also inconclusive.
+
+```{r}
+LRstats(m3, m4)
+```
+
+## Visualizing models
+
+
 
 
 
