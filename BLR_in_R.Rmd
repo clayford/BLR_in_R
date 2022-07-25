@@ -30,6 +30,8 @@ rbinom(n = 10, size = 1, prob = 0.5)
 
 ## Load packages
 
+We'll use the following packages in this workshop.
+
 ```{r}
 library(vcdExtra)
 library(car)
@@ -44,9 +46,9 @@ Pick a UVA student at random. What is the probability they have a tattoo? This i
 
 The _proportion_, 15/100 = 0.15, can be interpreted as an estimated _probability_ that a UVA student has a tattoo. Recall that proportions and probabilities range from 0 to 1. We might conclude about 15% of UVA students have tattoos, or there's a probability of about 0.15 that a randomly selected UVA student has a tattoo.
 
-What if we sampled 100 males and 100 females and compared the proportion with tattoos? This implies the probability of having a tattoo may be related to sex.
+What if we sampled 100 males and 100 females and compared the proportion with tattoos? Perhaps 0.18 of males have tattoos and 0.12 of females have tattoos. This suggests the probability of having a tattoo may be related to sex.
 
-What if we also collected other information such as cumulative GPA or Greek life (yes or no)? Again this implies the probability of having a tattoo may be related to multiple _variables_ or _predictors_.
+What if we also collected other information such as cumulative GPA or Greek life (yes or no)? Again this suggests the probability of having a tattoo may be related to multiple _variables_ or _predictors_.
 
 _Binary Logistic Regression_ is a method that allows us to investigate questions such as this. It allows us to _model the probability_ of a binary event given multiple predictors.
 
@@ -54,7 +56,7 @@ Statistical modeling boils down to 3 steps:
 
 1. propose and fit a model
 2. assess if model is good
-3. use model to make predictions, quantify relationships, or provide advice
+3. use model to make predictions or quantify relationships
 
 ## Load Data for the workshop
 
@@ -67,7 +69,7 @@ names(icu)
 
 The goal today is to teach the basics of Binary Logistic Regression by developing a model to predict the probability of survival after admission to this ICU and to study the risk factors associated with ICU mortality. 
 
-_List of variables_
+### List of variables
 
 - died: Died before discharge? (No or Yes)
 - age: Patient age
@@ -122,7 +124,7 @@ Binary logistic regression produces a _model_ that we can use to make probabilit
 - predict probability of death given age, sex, and whether you were unconscious at admission
 - determine how much the probability of dying increases (or decreases) if you were unconscious at admission
 
-_We are responsible for proposing and assessing the model_! For example, the "sex" variable may or may not help our model. We have to decide to retain it or drop it.
+_We are responsible for proposing and assessing the model_! For example, the "sex" variable may or may not help our model. We have to decide to retain it or drop it. Subject matter expertise is just as important as statistical expertise.
 
 One way to fit binary logistic regression models in R is with the `glm()` function. GLM = Generalized Linear Model.
 
@@ -135,7 +137,7 @@ summary(m)
 
 The model is in the Estimate column of the coefficients section. Here's the model expressed in basic math notation:
 
-$$\text{died} = -3.58 + 0.02\text{ age} + 0.14\text{ sex} + 3.6\text{ uncons}$$
+$$\text{died} = -3.58 + 0.02\text{ age} + 0.14\text{ sex} + 3.60\text{ uncons}$$
 
 If we plug in values for `age`, `sex`, and `uncons` we get _predicted log odds_ of dying, not probability. 
 
@@ -158,8 +160,9 @@ We predict a very high probability of dying given you're a 70 year old male who 
 
 Again we should assess this model and think carefully before we fall in love with our prediction!
 
-## Odds versus Probability
+## Probability versus Odds versus Log Odds
 
+Let p be probability.
 Odds equal p/(1-p).   
 Log odds is log(odds). 
 
@@ -172,6 +175,24 @@ logodds <- log(odds)
 data.frame(p, odds = as.character(odds), logodds)
 ```
 
+R has built-in functions for converting probability to log odds and log odds to probability. 
+
+- `plogis`: convert log odds to probability
+- `qlogis`: convert probability to log odds
+
+Convert log odds of 2 to probability.
+
+```{r}
+plogis(2)
+```
+
+Convert probability of 0.8807971 to log odds.
+
+```{r}
+qlogis(0.8807971)
+```
+
+You probably don't need these functions when doing logistic regression in R, but they can be useful to know. 
 
 ## How to interpret coefficients
 
@@ -215,7 +236,7 @@ Let's look at the odds ratios of our model:
 exp(coef(m))
 ```
 
-It appears the odds of dying when unconscious are about 36 times higher than the odds of dying when you are not unconscious. We can calculate this "by hand" by predicting probabilities for two people, one who was unconscious and the other who was not:
+Our model claims the odds of dying when unconscious are about 36 times higher than the odds of dying when you are not unconscious. We can calculate this "by hand" by predicting probabilities for two people, one who was unconscious and the other who was not:
 
 ```{r}
 p1 <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
@@ -242,27 +263,27 @@ Every 10 year increase in age increases the odds of dying by about 33%.
 If we use `coef()` on `summary()` we extract the coefficient table which contains standard errors, test statistics (z value), and p-values.
 
 - Std. Error: quantifies uncertainty of estimated coefficient. It may help to imagine adding and subtracting it to your estimate to get an idea of the variability of your estimate.
-- z value: Estimate/Std. Error. It's a ratio. Large ratios mean coefficients with small standard errors. z values larger than 3 are usually considered "big"
-- Pr(>|z|): probability of getting a z value as big or bigger if coefficient is 0, given other predictors already in model
+- z value: Ratio of Estimate to Std. Error. Large ratios mean coefficients with relatively small standard errors. z values larger than 3 are usually considered "big".
+- Pr(>|z|): probability of getting a z value as big or bigger if coefficient is 0, given other predictors already in model.
 
 Altogether this information is used to assess whether predictor coefficients are reliably positive or negative (ie, different from 0)
 
 ```{r}
-coef(summary(m))
+coef(summary(m)) |> round(3)
 ```
 
 Another way to assess direction and magnitude of coefficients is with confidence intervals. Use `confint()` on the model object.
 
 ```{r}
-confint(m)
+confint(m) |> round(3)
 ```
 
-We're not sure if being Male increases or decreases the chance of dying.
+We're not sure if being Male increases or decreases the chance of dying. The lower bound is negative and the upper bound is positive.
 
 Using `exp()` with `confint()` provides a confidence interval on the odds ratios. Of interest here is whether or not the CI crosses 1. A ratio of 1 implies no difference in odds.
 
 ```{r}
-exp(confint(m))
+exp(confint(m)) |> round(3)
 ```
 
 ## Code along 2
@@ -304,7 +325,7 @@ m0 <- glm(died ~ 1, data = icu, family = binomial)
 coef(m0)
 ```
 
-The intercept coefficient is the predicted log odds of dying. We can convert log odds to probability using the inverse logit, which is available as the `plogis()` function:
+The intercept coefficient is the predicted _log odds_ of dying. We can convert log odds to probability using the inverse logit, which is available as the `plogis()` function:
 
 ```{r}
 # convert log odds to probability
@@ -329,7 +350,7 @@ Notice that terms are added sequentially, _in order_. This is sometimes called a
 - Adding sex with age already in the model doesn't seem to make any further improvement. 
 - Adding uncons with age and sex already in the model further improves the model quite a bit. Notice the drop in _Residual Deviance_. 
 
-Deviance is a statistical summary of model fit. A "good" predictor should drop Residual Deviance by more than 1. Notice sex produces no change in deviance, but uncons drops it more than 30.
+Deviance is a _statistical summary of model fit_. A "good" predictor should drop Residual Deviance by more than 1. Notice sex produces no change in deviance, but uncons drops it more than 30.
 
 An alternative to Type I tests are _Type II tests_, which test the contribution of each variable assuming all others are included. The `Anova()` function from the car package produces Type II tests. This technically does not compare the model to the NULL model. However it does allow us to asses each variable's contribution to the model.
 
@@ -365,7 +386,11 @@ So far our models only contain _main effects_. The effects are _additive_. It do
 
 We can relax that assumption by allowing variables to _interact_ and to allow variables to have _non-linear_ effects. These make our models more complex and more difficult to interpret. But they also may produce better models that more accurately explain the probability of our response.
 
-**Interactions:** Below we allow age and uncons to interact by adding `age:uncons` to the model. The interaction itself does not seem necessary according to the summary output.
+### Interactions
+
+When variables interact, that means we cannot untangle their effects. The effect of one depends on another. For example, perhaps the effect of age depends on uncons status. 
+
+Below we allow age and uncons to interact by adding `age:uncons` to the model. That does not mean they really interact. We're simply _allowing them to interact in our model_. The evidence for the hypothesized interaction seems rather week according to the small z value and relatively high p-value.
 
 ```{r}
 m_int <- glm(died ~ age + sex + uncons + age:uncons, data = icu,
@@ -373,7 +398,11 @@ m_int <- glm(died ~ age + sex + uncons + age:uncons, data = icu,
 summary(m_int)
 ```
 
-**Non-linear effects:** Below we allow age to have a non-linear effect by fitting a 2nd-degree polynomial using `poly(age, 2)`.
+### Non-linear effects
+
+A non-linear effect is not constant. The slope or trajectory changes over the range of values. For example, humans don't grow in height at a constant rate. We don't grow 3 inches per year until we die. We tend to grow at varying rates until we stop in our late teens or 20s.
+
+Below we allow age to have a non-linear effect by fitting a 2nd-degree polynomial using `poly(age, 2)`.
 
 ```{r}
 m_poly <- glm(died ~ poly(age, 2) + sex + uncons, data = icu,
@@ -433,8 +462,26 @@ ggpredict(model = m_int, terms = c("age", "uncons")) |>
   plot()
 ```
 
-The `Effect()` is on the log odds scale, but labeled with probability. The `ggpredict()` plot is on the probability scale.
+The `Effect()` plot is on the log odds scale, but labeled with probability. The `ggpredict()` plot is on the probability scale.
 
+## Code Along 4
+
+Fit a new model with the following formula and save as `m5`. (Systolic is the systolic blood pressure at admission)
+
+`died ~ age + cancer + admit + uncons + systolic + age:systolic`
+
+Does the interaction seem necessary?
+Visualize the interaction.
+
+```{r}
+m5 <- glm(died ~ age + cancer + admit + uncons + systolic + age:systolic,
+          data = icu, family = binomial)
+Anova(m5)
+```
+
+```{r}
+Effect(c("systolic", "age"), mod = m5) |> plot()
+```
 
 
 ## Comparing models
@@ -473,13 +520,67 @@ The interaction may be useful but is probably small. Whether or not to keep it i
 LRstats(m3, m4)
 ```
 
-## Visualizing models
+## Influence and Diagnostic Plots
 
+One or two influential observations can completely change a model. For example, a notable interaction may be due to an observation's unusual values. 
 
+An effective plot for quickly assessing influence is the `influencePlot()` function from car package. It plots three difference diagnostics:
 
+1. _residuals_ on y axis: how different is an observed response from its predicted response
+2. _Hat values_ on x axis: measures "leverage", potential impact of a case on the model
+3. _Cook's distance_ as size of points: influence of observation on regression coefficients
+
+Let's use this plot with our `m5` model.
+
+```{r}
+m5 <- glm(died ~ age + cancer + admit + uncons + systolic + age:systolic,
+          data = icu, family = binomial)
+```
+
+Assigning the result creates a data frame of the most influential values.
+
+```{r}
+infl <- influencePlot(m5)
+```
+
+Here are the exact values of the labeled points. Nothing is too outrageous. A Cook's D bigger than 1 is the usual red flag. A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). Residuals larger than 2.5 may be of interest.
+
+```{r}
+infl
+```
+
+We can extract the rownames and use them to subset the icu data frame to see the observed values. 
+
+```{r}
+pred <- predict(m5, type = "response")[rownames(infl)]
+obs <- icu[rownames(infl), c("died", "age", "cancer", 
+                             "admit", "uncons", "systolic")]
+cbind(obs, pred)
+```
+
+- Subject 84: model predicts death at 96%, but subject lived
+- Subject 645: young at 36, with high systolic
+- Subject 881: model predicts death at 73%, but subject lived; also 89
+- Subject 208: subject had Elective admit but arrived unconscious? (typo?)
+- Subject 285: model predicts death at 4%, but subject died
+
+One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Here's one way to fit a new model that does not include the influential points identified by `influencePlot`, using `subset = !rownames(icu) %in% rownames(infl)`. Then we compare coefficients from both models.
+
+```{r}
+m5a <- glm(died ~ age + cancer + admit + uncons + systolic + age:systolic,
+          data = icu, family = binomial, 
+          subset = !rownames(icu) %in% rownames(infl))
+rbind(before = coef(m5), after = coef(m5a))
+```
+
+Removing the five influential observations produces larger coefficients and makes the model more dramatic. A conservative approach would be to retain the influential observations since the model is more modest and report the results of the sensitivity analysis.
 
 
 ## References
 
+- Friendly M, Meyer D (2016). Discrete Data Analysis with R: Visualization and Modeling Techniques for Categorical and Count Data. CRC Press.
 - Friendly M (2022). _vcdExtra: 'vcd' Extensions and Additions_. R package version 0.8-0, <https://CRAN.R-project.org/package=vcdExtra>.
 - Lemeshow, S., Teres, D., Avrunin, J. S., Pastides, H. (1988). Predicting the Outcome of Intensive Care Unit Patients. Journal of the American Statistical Association, 83, 348-356.
+- John Fox (2003). Effect Displays in R for Generalised Linear Models. Journal of Statistical Software, 8(15), 1-27. doi 10.18637/jss.v008.i15
+- Lüdecke D (2018). “ggeffects: Tidy Data Frames of Marginal Effects from Regression Models.” _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772  <https://doi.org/10.21105/joss.00772>.
+- R Core Team (2022). R: A language and environment for statistical  computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
