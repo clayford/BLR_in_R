@@ -1,0 +1,65 @@
+
+## CODE ALONG 1
+- create a cross tabulation of admit and died
+- Plot `died` as a function of `systolic`.
+
+
+xtabs(~ admit + died, data = icu)
+plot(died ~ systolic, data = icu)
+
+## CODE ALONG 2
+
+- Model died as a function of age, cancer, admit and uncons. Save the model as `m2`.
+- Use `summary()` and `confint()` on the model
+- Interpret the coefficient for admit as an odds ratio
+- What's the predicted probability of dying for a person age 50 with cancer, Emergency admission, and unconscious?
+
+m2 <- glm(died ~ age + cancer + admit + uncons, data = icu, 
+          family = binomial)
+summary(m2)
+confint(m2)
+predict(m2, newdata = data.frame(age = 50, cancer = "Yes", 
+                                 admit = "Emergency", uncons = "Yes"),
+        type = "response")
+        
+## CODE ALONG 3
+
+Assess model `m2` using the methods we just described.
+
+anova(m2, test = "Chisq")
+LRstats(m2)
+
+
+## CODE ALONG 4
+
+- Fit a new model with the following formula and save as `m3`. (Systolic is the systolic blood pressure at admission): 
+  `died ~ age + cancer + admit + uncons + systolic + age:systolic`   
+- Does the interaction seem necessary?
+- Visualize the interaction.
+
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
+
+
+m3 <- glm(died ~ age + cancer + systolic + admit + uncons + age:systolic,
+          data = icu, family = binomial)
+Anova(m3)
+
+Effect(c("systolic", "age"), mod = m3) |> 
+         plot()
+
+
+## CODE ALONG 5
+
+- Fit a new model that uses all predictors and the age:systolic interaction: `died ~ . + age:systolic`. Call the model `m6`.
+- Compare model `m6` to `m3` using the `LRstats()` and `anova()` functions. Why is it OK to use the `anova()` function?
+- Check for influential observations using the `influencePlot()` function. Save the result as `infl_m6`.
+
+
+m6 <- glm(died ~ . + age:systolic, data = icu, family = binomial)
+summary(m6)
+LRstats(m3, m6)
+anova(m3, m6, test = "Chisq")
+infl_m6 <- influencePlot(m6)
+predict(m6, type = "response")["154"]
+icu["154",]
+

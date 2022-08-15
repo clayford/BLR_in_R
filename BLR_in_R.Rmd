@@ -24,9 +24,7 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 Enter a new code chunk and run the code `rbinom(n = 10, size = 1, prob = 0.5)` (sample 10 random values from a binomial distribution, ie flip a fair coin 10 times)
 
-```{r}
-rbinom(n = 10, size = 1, prob = 0.5)
-```
+
 
 ## Load packages
 
@@ -118,6 +116,9 @@ plot(died ~ age, data = icu)
 - create a cross tabulation of admit and died
 - Plot `died` as a function of `systolic`.
 
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
+
+
 
 ## Binary Logistic Regression basics
 
@@ -165,10 +166,14 @@ Again we should assess this model and think carefully before we fall in love wit
 ## Probability versus Odds versus Log Odds
 
 Let p be probability.    
-Odds equal p/(1-p).     
+Odds = p/(1-p).     
 Log odds is log(odds).   
  
-Let's convert a few probabilities to odds and log odds. The function `fractions()` from the MASS package returns fractions, which is usually how odds are expressed. (We use `as.character()` to print the fraction bar.) Notice odds are always positive, and that log odds can be positive or negative.
+Let's convert a few probabilities to odds and log odds. The function `fractions()` from the MASS package returns fractions, which is usually how odds are expressed. (We use `as.character()` to print the fraction bar.) Notice a few things:
+
+- odds are always positive
+- log odds can be positive or negative
+- small changes in probability can result in "big" changes in log odds. log odds change rapidly when p is close to 0 or 1.
 
 ```{r}
 p <- c(0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999)
@@ -176,6 +181,15 @@ odds <- MASS::fractions(p/(1-p))
 logodds <- log(odds)
 data.frame(p, odds = as.character(odds), logodds)
 ```
+
+No intro logistic regression would be complete without a plot of probability versus log odds. 
+
+```{r}
+p <- seq(0.0001, 0.9999, length.out = 1000)
+logodds <- log(p/(1-p))
+plot(logodds, p, type = "l")
+```
+
 
 R has built-in functions for converting probability to log odds and log odds to probability. 
 
@@ -231,6 +245,8 @@ odds1/odds2
 ```
 
 This says the odds of event 1 are about 2.7 times higher than the odds of event 2.
+
+An odds ratio of 1 implies the odds are the same, and hence there is no difference between the event probabilities. They are equally likely.
 
 Let's look at the odds ratios of our model:
 
@@ -295,18 +311,9 @@ exp(confint(m)) |> round(3)
 - Interpret the coefficient for admit as an odds ratio
 - What's the predicted probability of dying for a person age 50 with cancer, Emergency admission, and unconscious?
 
-```{r}
-m2 <- glm(died ~ age + cancer + admit + uncons, data = icu, 
-          family = binomial)
-summary(m2)
-confint(m2)
-```
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
-```{r}
-predict(m2, newdata = data.frame(age = 50, cancer = "Yes", 
-                                 admit = "Emergency", uncons = "Yes"),
-        type = "response")
-```
+
 
 ## Model assessment
 
@@ -378,13 +385,9 @@ The result of this test fails to provide evidence against the Null.
 
 Assess model `m2` using the methods we just described.
 
-```{r}
-anova(m2, test = "Chisq")
-```
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
-```{r}
-LRstats(m2)
-```
+
 
 ## Fitting more complex models
 
@@ -470,17 +473,7 @@ ggeffect(model = m_int, terms = c("age", "uncons")) |>
 - Does the interaction seem necessary?
 - Visualize the interaction.
 
-```{r}
-m3 <- glm(died ~ age + cancer + systolic + admit + uncons + age:systolic,
-          data = icu, family = binomial)
-Anova(m3)
-```
-
-```{r}
-Effect(c("systolic", "age"), mod = m3) |> 
-         plot()
-```
-
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
 ## Comparing models
 
@@ -579,36 +572,7 @@ Removing the five influential observations produces larger coefficients and make
 - Compare model `m6` to `m3` using the `LRstats()` and `anova()` functions. Why is it OK to use the `anova()` function?
 - Check for influential observations using the `influencePlot()` function. Save the result as `infl_m6`.
 
-```{r}
-m6 <- glm(died ~ . + age:systolic, data = icu, family = binomial)
-summary(m6)
-```
-
-
-```{r}
-LRstats(m3, m6)
-```
-
-```{r}
-anova(m3, m6, test = "Chisq")
-```
-
-
-
-```{r}
-infl_m6 <- influencePlot(m6)
-
-```
-
-
-```{r}
-predict(m6, type = "response")["154"]
-
-```
-
-```{r}
-icu["154",]
-```
+Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
 
 ## References
