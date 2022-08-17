@@ -575,6 +575,10 @@ Removing the five influential observations produces larger coefficients and make
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
 
+## We're done!
+
+For help with statistical analysis, contact the UVA Library StatLab: `statlab@virginia.edu`
+
 ## References
 
 - Friendly M, Meyer D (2016). Discrete Data Analysis with R: Visualization and Modeling Techniques for Categorical and Count Data. CRC Press.
@@ -583,3 +587,117 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 - John Fox (2003). Effect Displays in R for Generalised Linear Models. Journal of Statistical Software, 8(15), 1-27. doi 10.18637/jss.v008.i15
 - Lüdecke D (2018). "ggeffects: Tidy Data Frames of Marginal Effects from Regression Models." _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772  <https://doi.org/10.21105/joss.00772>.
 - R Core Team (2022). R: A language and environment for statistical  computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
+
+
+## Three ways to fit a binary logistic regression model
+
+The `glm()` function allows binary response data to be structured in three different ways:
+
+1. As a 0/1 indicator or factor. This is what we presented in this workshop
+2. As a proportion with the total number of cases given by the `weights` argument.
+3. As a two-column matrix, with the first column giving the number of successes and the second the number of failures.
+
+Let's demonstrate all three ways using a subset of the icu data.
+
+### 1. As a 0/1 indicator
+
+Let's say we want to model died as function of uncons and age. Our data is already structured as one row per event with a 0/1 indicator.
+
+```{r}
+mod1 <- glm(died ~ uncons + age, data = icu, family = binomial)
+summary(mod1)
+```
+
+### 2. As a proportion
+
+To demonstrate this we need to first restructure the data. To begin, we need to set the response as numeric 0 and 1. The died variable is currently a factor.
+
+```{r}
+icu$died <- ifelse(icu$died == "Yes", 1, 0)
+```
+
+Next we get the total deaths for each uncons and age combination. For example, we have 3 deaths for subjects age 75 who were not unconscious upon submission to the icu.
+
+```{r}
+# sum of died by uncons and age
+x <- aggregate(died ~ uncons + age, data = icu, sum)
+x[x$age %in% 72:75,]
+```
+
+Next we get the total number of observations for each age and uncons combination. For example, we have 2 observations for subjects age 16 who came to the icu conscious.
+
+```{r}
+# sum of observations by uncons and age
+n <- aggregate(died ~ uncons + age, data = icu, length)
+head(n)
+```
+Finally we combine the data into a data frame. We name the number of observations for each uncons/age combination as "trials" and the proportion of deaths per combination as "proportion".
+
+```{r}
+# combine into data frame and create column for proportions
+icu2 <- data.frame(uncons = x$uncons, 
+                   age = x$age, 
+                   died = x$died, 
+                   trials = n$died,
+                   proportion = x$died/n$died)
+head(icu2)
+```
+Now we use "proportion" as the response, but also include the argument `weights = trials` to indicate total number of observations at each uncons and age combination.
+
+```{r}
+mod2 <- glm(proportion ~ uncons + age, data = icu2, family = binomial,
+            weights = trials)
+summary(mod2)
+```
+
+Notice the coefficient estimates are identical but the deviance statistics are different.
+
+We could also use trials and died on-the-fly by entering `died/trials` as the response, like so:
+
+```{r}
+mod2 <- glm(died/trials ~ uncons + age, data = icu2, family = binomial,
+            weights = trials)
+```
+
+
+### 3. As a two-column matrix
+
+In this scenario, the response is a two-column matrix, with the first column giving the number of deaths and the second the number of survivors. We need to add number of survivors to our data frame, which is simply the difference between trials and died.
+
+```{r}
+icu2$survivor <- icu2$trials - icu2$died
+```
+
+Now use `cbind()` to create a matrix of "died" and "survivor" and use that as our response. We no longer need to use the weights argument in this case.
+
+```{r}
+mod3 <- glm(cbind(died, survivor) ~ uncons + age, 
+            family = binomial, data = icu2)
+summary(mod3)
+```
+
+The result for the third method is identical to the result for the second method.
+
+_Why one method versus the other?_
+
+Even though all three methods produce the same model coefficients, method 1 produces residuals that differ from methods 2 and 3.
+
+Method 1 produces a residual for each unique predictor value. The resulting residual versus fitted plot produces weird patterns that make it hard to assess model fit. Below is a plot for `mod1`. In this case a residual is `1 - predicted probability` or `0 - predicted probability` depending on the observed response. 
+
+```{r}
+plot(mod1, which = 1)
+```
+
+Compare to a residual versus fitted plot for `mod2` and `mod3`. This looks similar to the types of residual versus fitted plots we get for linear models. 
+
+```{r}
+plot(mod2, which = 1)
+```
+
+rows 39 and 74 of icu2 reveal two older patients who came to icu unconscious but lived. The model predicts a high probability of them dying, but they did not. Hence the low, negative position in the plot. We observe them living but the model predicts high probability of death. The residual is therefore negative. The plot suggests these subjects had a lower probability of death than the model predicts. 
+
+```{r}
+icu2$fitted <- fitted(mod2)
+icu2[c(39,74),]
+```
+
