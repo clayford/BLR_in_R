@@ -715,3 +715,15 @@ icu2$fitted <- fitted(mod2)
 icu2[c(39,74),]
 ```
 
+## Assessing predictive accuracy via calibration
+
+How will our model perform for new data that was not used to create the model? _Model validation_ can help us assess this question.
+
+A common approach to model validation is the _train/test data-splitting approach_, where we hold out a random subset of data (the test set), fit the model to the remaining data (the training set), and then see how well the model performs with the test data. However, this reduces the sample size used for model development and only validates a model fit to a subset of the data. There's also a chance a lucky split could produce unusually low or high predictive accuracy.
+
+A more efficient approach is bootstrap validation.
+
+
+
+Calibration is the ability of a model to make unbiased estimates of an outcome. 
+
