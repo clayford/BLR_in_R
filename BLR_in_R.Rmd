@@ -22,7 +22,11 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 ## CODE ALONG 0
 
-Enter a new code chunk and run the code `rbinom(n = 10, size = 1, prob = 0.5)` (sample 10 random values from a binomial distribution, ie flip a fair coin 10 times)
+Enter a new code chunk and run the code `rbinom(n = 10, size = 1, prob = 0.5)`. This generates random values from Binomial Distribution with trial size = 1 and probability = 0.5. (this is like flipping a fair coin 10 times)
+
+```{r}
+rbinom(n = 10, size = 1, prob = 0.5)
+```
 
 
 
@@ -42,7 +46,7 @@ library(ggeffects)
 
 Pick a UVA student at random. What is the probability they have a tattoo? This is a _binary_ response. Only two possible answers: yes or no. We don't know, so we take a random sample. Let's say we randomly sample 100 students and find that 15 students have tattoos. 
 
-The _proportion_, 15/100 = 0.15, can be interpreted as an estimated _probability_ that a UVA student has a tattoo. Recall that proportions and probabilities range from 0 to 1. We might conclude about 15% of UVA students have tattoos, or there's a probability of about 0.15 that a randomly selected UVA student has a tattoo.
+The _proportion_, 15/100 = 0.15, could be interpreted as an estimated _probability_ that a UVA student has a tattoo. Recall that proportions and probabilities range from 0 to 1. We might conclude about 15% of UVA students have tattoos, or there's a probability of about 0.15 that a randomly selected UVA student has a tattoo.
 
 What if we sampled 100 males and 100 females and compared the proportion with tattoos? Perhaps 0.18 of males have tattoos and 0.12 of females have tattoos. This suggests the probability of having a tattoo may be related to sex.
 
@@ -60,6 +64,8 @@ Statistical modeling boils down to 3 steps:
 
 Today we'll work with data on Intensive Care Unit (ICU) admissions. This data are a sample of 200 subjects who were part of a much larger study on survival of patients following admission to an adult ICU, derived from Hosmer, Lemeshow and Sturdivant (2013) and included with the vcdExtra package, Friendly (2022).
 
+Below we read in the data from GitHub where it is stored as an _rds_ file. The rds format is an efficient way to store R objects. To read in an rds file we use the `readRDS()` function. To read in from a web site, we need to use the `url()` function to open a connection to the site.
+
 ```{r}
 URL <- "https://github.com/clayford/BLR_in_R/raw/main/data/icu.rds"
 icu <- readRDS(file = url(URL))
@@ -68,7 +74,7 @@ names(icu)
 
 ### List of variables
 
-- died: Died before discharge? (No or Yes)
+- died: Did patient die in ICU? (No or Yes)
 - age: Patient age
 - sex: Patient sex (Female or Male)
 - cancer: Cancer part of present problem? (No or Yes)
@@ -83,7 +89,7 @@ The goal today is to teach the basics of Binary Logistic Regression by developin
 
 ## Explore the ICU Data
 
-The response variable is "died". Let's count the responses using the `xtabs()` function. The argument `addNA = TRUE` reports missing values if any are present.
+The response variable is "died". Let's count the responses using the `xtabs()` function. The argument `addNA = TRUE` reports missing values if any are present. `xtabs()` uses formula notation. `~ died` means count the unique values of `died`.
 
 ```{r}
 xtabs(~ died, data = icu, addNA = TRUE)
@@ -264,7 +270,9 @@ p2 <- predict(m, newdata = data.frame(age = 60, sex = "Male",
                                       uncons = "No"),
               type = "response")
 # odds ratio
-or <- (p1/(1-p1)) / (p2/(1-p2))
+odds_p1 <- p1/(1-p1)
+odds_p2 <- p2/(1-p2)
+or <- odds_p1/odds_p2
 cbind(p1, p2, `odds ratio` = or)
 ```
 
@@ -284,13 +292,13 @@ If we use `coef()` on `summary()` we extract the coefficient table which contain
 - z value: Ratio of Estimate to Std. Error. Large ratios mean coefficients with relatively small standard errors. z values larger than 2 or 3 are usually considered "big".
 - Pr(>|z|): probability of getting a z value as big or bigger if coefficient is 0, given other predictors already in model.
 
-Altogether this information is used to assess whether predictor coefficients are reliably positive or negative (ie, different from 0)
+_Altogether this information is used to assess whether predictor coefficients are reliably positive or negative (ie, different from 0)_
 
 ```{r}
 coef(summary(m)) |> round(3)
 ```
 
-Another way to assess direction and magnitude of coefficients is with confidence intervals. Use `confint()` on the model object.
+P-values only assess whether a coefficient is different from 0. It's better to assess _direction and magnitude_ of coefficients with confidence intervals. Use `confint()` on the model object.
 
 ```{r}
 confint(m) |> round(3)
@@ -303,6 +311,8 @@ Using `exp()` with `confint()` provides a _confidence interval on the odds ratio
 ```{r}
 exp(confint(m)) |> round(3)
 ```
+
+The effect of age seems small, at least per one year increase. The effect of being unconscious seems highly variable. That's because we only have 15 subjects who arrived unconscious.
 
 ## CODE ALONG 2
 
@@ -366,6 +376,7 @@ Deviance is a _statistical summary of model fit_. A "good" predictor should drop
 An alternative to Type I tests are _Type II tests_, which test the contribution of each variable assuming all others are included. The `Anova()` function from the car package produces Type II tests. This technically does not compare the model to the NULL model. However it does allow us to asses each variable's contribution to the model.
 
 ```{r}
+# can also use drop1(m, test = "Chisq")
 Anova(m)
 ```
 
@@ -411,21 +422,23 @@ summary(m_int)
 
 A non-linear effect is not constant. The slope or trajectory changes over the range of values. For example, humans don't grow in height at a constant rate. We don't grow 3 inches per year until we die. We tend to grow at varying rates until we stop in our late teens or 20s.
 
-Below we allow age to have a non-linear effect by fitting a 2nd-degree polynomial using `poly(age, 2)`.
+Below we allow age to have a non-linear effect by using a _natural spline_ with 2 degrees of freedom. This basically allows the effect of age to change trajectory twice if needed. It's somewhat similar to polynomial regression, but better behaved in the extremes of the data. The splines package comes with R. The `ns()` function can be used directly in the model formula. The second argument specifies how many times you want to let the effect "bend", or change direction. 
 
 ```{r}
-m_poly <- glm(died ~ poly(age, 2) + sex + uncons, data = icu,
+library(splines)
+m_nle <- glm(died ~ ns(age, 2) + sex + uncons, data = icu,
              family = binomial)
-summary(m_poly)
+summary(m_nle)
 ```
 
-It's hard to tell if the polynomial is necessary based on the summary output. One proper way to assess this is using the `Anova()` function from the car package. This uses a likelihood ratio test to compare the model without the age polynomial to one with the age polynomial.
+It's hard to tell if the spline is necessary based on the summary output. One proper way to assess this is using the `Anova()` function from the car package. This uses a likelihood ratio test to compare the model without the age spline to one with the age spline.
 
 ```{r}
-Anova(m_poly)
+Anova(m_nle)
 ```
 
 It looks like it may be worth modeling age as a non-linear effect.
+
 
 ## Visualizing models
 
@@ -435,18 +448,18 @@ The basic idea is to pick a variable of interest, say age, and make predictions 
 
 Below we show two ways to do this using the effects and ggeffects packages. 
 
-First visualize `m_poly` using `Effect()` from the effects package. Notice we can pipe the result into `plot()`. The light blue ribbon is a 95% confidence band. The little ticks at the bottom are the observed values. Notice the ribbon gets larger (more uncertain) when we have fewer observations, which we see in the extremes of the data. It appears the effect of age doesn't change until after about age 55, and then it begins to increase. Also notice the y-axis is on the log-odds scale but labeled with probabilities. (set `type = "response"` to scale and label the y-axis to probabilities.)
+First visualize `m_nle` using `Effect()` from the effects package. Notice we can pipe the result into `plot()`. The light blue ribbon is a 95% confidence band. The little ticks at the bottom are the observed values. Notice the ribbon gets larger (more uncertain) when we have fewer observations, which we see in the extremes of the data. It appears the effect of age doesn't change until after about age 55, and then it begins to increase. Also notice the y-axis is on the log-odds scale but labeled with probabilities. (set `type = "response"` to scale and label the y-axis to probabilities.)
 
 ```{r}
-Effect("age", mod = m_poly) |> 
+Effect("age", mod = m_nle) |> 
   plot()
 ```
 
 We can make a ggplot2 version of this plot using `ggeffect()` from the ggeffects package. Again we can pipe the result into `plot()`. Set `log.y = TRUE` to get the same re-scaled y-axis as the plot from the effects package. Set to FALSE to rescale and label y-axis on the probability scale.
 
 ```{r}
-ggeffect(model = m_poly, terms = "age") |> 
-  plot(log.y = FALSE)
+ggeffect(model = m_nle, terms = "age") |> 
+  plot(log.y = TRUE)
 ```
 
 Next, we visualize m_int which models an interaction between age and uncons. This allows the effect of uncons to depend on age, and vice versa. (Recall the interaction was small and the p-value was about 0.11.) Using `Effect()`, we specify both variables as the focal predictors. The first variable will be plotted on the x-axis.
@@ -543,7 +556,7 @@ infl
 We can extract the rownames and use them to subset the icu data frame to see the observed values. 
 
 ```{r}
-pred <- predict(m5, type = "response")[rownames(infl)]
+pred <- predict(m3, type = "response")[rownames(infl)]
 obs <- icu[rownames(infl), c("died", "age", "cancer", 
                              "admit", "uncons", "systolic")]
 cbind(obs, pred)
@@ -553,15 +566,15 @@ cbind(obs, pred)
 - Subject 645: young at 36, with high systolic
 - Subject 881: model predicts death at 73%, but subject lived; also 89
 - Subject 208: subject had Elective admit but arrived unconscious? (typo?)
-- Subject 285: model predicts death at 4%, but subject died
+- Subject 285: model predicts death at 5%, but subject died
 
-One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Here's one way to fit a new model that does not include the influential points identified by `influencePlot`, using `subset = !rownames(icu) %in% rownames(infl)`. Then we compare coefficients from both models.
+One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Here's one way to fit a new model that does not include the influential points identified by `influencePlot`, using `subset = !rownames(icu) %in% rownames(infl)`. Then we compare coefficients from both models using the `compareCoefs()` function from the car package.
 
 ```{r}
 m3a <- glm(died ~ age + cancer + admit + uncons + systolic + age:systolic,
           data = icu, family = binomial, 
           subset = !rownames(icu) %in% rownames(infl))
-rbind(before = coef(m3), after = coef(m3a))
+compareCoefs(m3, m3a)
 ```
 
 Removing the five influential observations produces larger coefficients and makes the model more dramatic. A conservative approach would be to retain the influential observations since the model is more modest and report the results of the sensitivity analysis.
@@ -588,6 +601,7 @@ For help with statistical analysis, contact the UVA Library StatLab: `statlab@vi
 - Lüdecke D (2018). "ggeffects: Tidy Data Frames of Marginal Effects from Regression Models." _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772  <https://doi.org/10.21105/joss.00772>.
 - R Core Team (2022). R: A language and environment for statistical  computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
 
+## Cut for time
 
 ## Three ways to fit a binary logistic regression model
 
