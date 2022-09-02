@@ -80,6 +80,8 @@ grid()
 # https://randomeffect.net/post/2021/03/10/bias-corrected-calibration-curve-from-scratch/
 
 
+library(ggplot2); theme_set(theme_bw(base_size = 14))
+library(rms)
 set.seed(125)
 dat <- lme4::InstEval[sample(nrow(lme4::InstEval), 800), ]
 fit <- glm(y > 3 ~ lectage + studage + service + dept, binomial, dat)
@@ -87,6 +89,13 @@ pdat <- with(dat, data.frame(y = ifelse(y > 3, 1, 0),
                              prob = predict(fit, type = "response")))
 
 apparent.cal <- data.frame(with(pdat, lowess(prob, y, iter = 0)))
+
+apparent.cal2 <- with(pdat, lowess(prob, y, iter = 0))
+apparent.cal2.fun <- approxfun(apparent.cal2$x, apparent.cal2$y, 
+                               ties = "ordered")
+
+apparent.cal2.fun(0.4)
+apparent.cal2.fun(0.3)
 
 p <- ggplot(pdat, aes(prob, y)) +
   geom_point(shape = 21, size = 2) +
@@ -100,6 +109,7 @@ p <- ggplot(pdat, aes(prob, y)) +
 print(p)
 
 ## Range of inputs on which to calculate calibrations
+# pdat$prob are predicted probabilities from model
 srange <- seq(min(pdat$prob), max(pdat$prob), length.out = 60)
 
 ## Discard the smallest and largest probs for robustness, and agreement with rms::calibrate
@@ -107,16 +117,18 @@ srange <- srange[5 : (length(srange) - 4)]
 
 ## The apparent calibration is determined by this loess curve.
 apparent.cal.fit <- with(pdat, lowess(prob, y, iter = 0))
-app.cal.fun <- approxfun(apparent.cal.fit$x, apparent.cal.fit$y)
+app.cal.fun <- approxfun(apparent.cal.fit$x, apparent.cal.fit$y, 
+                         ties = "ordered")
 app.cal.pred <- app.cal.fun(srange)
 
 ## Number of bootstrap replicates
 nsim <- 300
 
 ## Storage for bootstrap optimism (one row per bootstrap resample)
+# dim = 300 x 52
 opt.out <- matrix(NA, nsim, length(srange))
 
-i <- 1
+# i <- 1
 for (i in 1 : nsim) {
   
   ## Sample bootstrap data set from original data
@@ -136,12 +148,9 @@ for (i in 1 : nsim) {
   ## Collect a set of them for comparison
   boot.cal.pred <- boot.cal.fun(srange)
   
-  ## Apply the bootstrap model to the original data
-  prob.boot.orig <- predict(fit.boot, dat, type = "response")
-  
   ## Make a DF of the boot model predictions on original data
   pdat.boot.orig <- data.frame(y = ifelse(dat$y > 3, 1, 0),
-                               prob = prob.boot.orig)
+                               prob = predict(fit.boot, dat, type = "response"))
   
   ## Fit a calibration curve to the original data w/ boot model predictions
   boot.cal.orig.fit <- with(pdat.boot.orig, lowess(prob, y, iter = 0))
@@ -152,6 +161,69 @@ for (i in 1 : nsim) {
   boot.cal.orig.pred <- boot.cal.orig.fun(srange)
   
   ## Take the difference for estimate of optimism
+  ## boot model on boot data - boot model on original data
   opt <- boot.cal.pred - boot.cal.orig.pred
   opt.out[i, ] <- opt
 }
+
+## The bias corrected calibration curve is the apparent calibration less the average bootstrap optimism
+bias.corrected.cal <- app.cal.pred - colMeans(opt.out)
+
+ppdat <- data.frame(srange, app.cal.pred, bias.corrected.cal)
+
+ggplot(ppdat, aes(srange, app.cal.pred)) +
+  geom_line(linetype = "dotted", color = "black") +
+  geom_line(aes(y = bias.corrected.cal), color = "black") +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") +
+  # scale_x_continuous(breaks = seq(0, 1, 0.1)) +
+  # scale_y_continuous(breaks = seq(0, 1, 0.1)) +
+  xlab("Estimated Prob.") +
+  ylab("Empirical Prob.") +
+  ggtitle("Logistic Regression Calibration Plot")
+
+refit <- lrm(y > 3 ~ lectage + studage + service + dept, dat, x = TRUE, y = TRUE)
+val <- validate(refit, B = 200)
+val
+cal <- calibrate(refit, B = 200)
+plot(cal)
+
+# example of perfect calibration curve
+set.seed(1)
+n <- 1000
+x1 <- sample(0:1, size = n, replace = TRUE)
+x2 <- round(runif(n = n, min = 1, max = 5), 2)
+x3 <- round(rnorm(n = n), 2)
+lp <- -3.5 + 1.3*x1 + 0.9*x2 + -0.3*x3 + 0.2*x1*x2 
+p <- plogis(lp)
+summary(p)
+hist(p)
+y <- rbinom(n = n, size = 1, prob = p)
+table(y)
+d <- data.frame(y, x1, x2, x3)
+
+# correct model
+m <- glm(y ~ x1 + x2 + x3 + x1:x2, binomial, data = d)
+summary(m)
+
+pdat <- data.frame(phat = predict(m, type = "response"),
+                   y = y)
+ggplot(pdat) +
+  aes(x = phat, y = y) +
+  geom_point(alpha = 1/5) +
+  geom_smooth(method = 'loess', se = F) +
+  geom_abline(intercept = 0, slope = 1, color = "red")
+
+# example of not-so-perfect perfect calibration curve
+# incorrect model
+m2 <- glm(y ~ x3, binomial, data = d)
+summary(m2)
+
+pdat2 <- data.frame(phat = predict(m2, type = "response"),
+                   y = d$y)
+ggplot(pdat2) +
+  aes(x = phat, y = y) +
+  geom_point(alpha = 1/5) +
+  geom_smooth(method = 'loess', se = F) +
+  geom_abline(intercept = 0, slope = 1, color = "red")
+
+

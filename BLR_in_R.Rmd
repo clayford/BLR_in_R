@@ -316,13 +316,20 @@ The effect of age seems small, at least per one year increase. The effect of bei
 
 ## CODE ALONG 2
 
-- Model died as a function of age, cancer, admit and uncons. Save the model as `m2`.
+- Model died as a function of age, admit, and uncons. Save the model as `m2`.
 - Use `summary()` and `confint()` on the model
 - Interpret the coefficient for admit as an odds ratio
-- What's the predicted probability of dying for a person age 50 with cancer, Emergency admission, and unconscious?
+- What's the predicted probability of dying for a person age 50 with Emergency admission and unconscious?
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
+```{r}
+m2 <- glm(died ~ age + admit + uncons, data = icu, 
+          family = binomial)
+predict(m2, newdata = data.frame(age = 50, admit = "Emergency", 
+                                 uncons = "Yes"),
+        type = "response")
+```
 
 
 ## Model assessment
@@ -482,11 +489,12 @@ ggeffect(model = m_int, terms = c("age", "uncons")) |>
 ## CODE ALONG 4
 
 - Fit a new model with the following formula and save as `m3`. (Systolic is the systolic blood pressure at admission): 
-  `died ~ age + cancer + admit + uncons + systolic + age:systolic`   
+  `died ~ age + admit + uncons + age:uncons`   
 - Does the interaction seem necessary?
 - Visualize the interaction.
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
+
 
 ## Comparing models
 
@@ -537,7 +545,7 @@ An effective plot for quickly assessing influence is the `influencePlot()` funct
 Let's use this plot with our `m3` model.
 
 ```{r}
-m3 <- glm(died ~ age + cancer + admit + uncons + systolic + age:systolic,
+m3 <- glm(died ~ age + admit + uncons + age:uncons,
           data = icu, family = binomial)
 ```
 
@@ -562,30 +570,37 @@ obs <- icu[rownames(infl), c("died", "age", "cancer",
 cbind(obs, pred)
 ```
 
-- Subject 84: model predicts death at 94%, but subject lived
-- Subject 645: young at 36, with high systolic
-- Subject 881: model predicts death at 73%, but subject lived; also 89
+- Subject 84: model predicts death at 96%, but subject lived
+- Subject 881: one of the older subjects 89 and lived
+- Subject 202: model predicts death at 4%, but subject died
 - Subject 208: subject had Elective admit but arrived unconscious? (typo?)
-- Subject 285: model predicts death at 5%, but subject died
 
 One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Here's one way to fit a new model that does not include the influential points identified by `influencePlot`, using `subset = !rownames(icu) %in% rownames(infl)`. Then we compare coefficients from both models using the `compareCoefs()` function from the car package.
 
 ```{r}
-m3a <- glm(died ~ age + cancer + admit + uncons + systolic + age:systolic,
+m3a <- glm(died ~ age + admit + uncons + age:uncons,
           data = icu, family = binomial, 
           subset = !rownames(icu) %in% rownames(infl))
 compareCoefs(m3, m3a)
 ```
 
-Removing the five influential observations produces larger coefficients and makes the model more dramatic. A conservative approach would be to retain the influential observations since the model is more modest and report the results of the sensitivity analysis.
+Removing the four influential observations absolutely blows up the standard errors! That's because we now have cells with 0 counts.
+
+```{r}
+xtabs(~ died + uncons + admit, data = icu, 
+      subset = !rownames(icu) %in% rownames(infl))
+```
+
+Be careful about reflexively dropping observations, "influential" or otherwise.
 
 ## CODE ALONG 5
 
-- Fit a new model that uses all predictors and the age:systolic interaction: `died ~ . + age:systolic`. Call the model `m6`.
-- Compare model `m6` to `m3` using the `LRstats()` and `anova()` functions. Why is it OK to use the `anova()` function?
-- Check for influential observations using the `influencePlot()` function. Save the result as `infl_m6`.
+- Fit a new model with formula `died ~ systolic + admit + uncons`. Call the model `m6`.
+- Check the model influential observations using the `influencePlot()` function. Save the result as `infl_m6`.
+_ Compare the model to `m2`.
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
+
 
 
 ## We're done!
@@ -716,11 +731,11 @@ A common approach to model validation is the _train/test data-splitting approach
 
 A more efficient approach is _bootstrap validation_. The basic idea is to resample your data with replacement, refit the model, then use the bootstrap model to calculate some statistic using the original data. 
 
-The `rms` package provides the `validate` function for this purpose. However it only works for models fit using `rms` functions. Instead of `glm()`, we need to use `lrm()`. We also need to specify `x = TRUE, y = TRUE` so the original data is stored in the model object. To see a summary of the fit, we simply need to print the model object. Notice it returms more output than a model fit with `glm()`, including several discrimination indices.
+The `rms` package provides the `validate` function for this purpose. However it only works for models fit using `rms` functions. Instead of `glm()`, we need to use `lrm()`. We also need to specify `x = TRUE, y = TRUE` so the original data is stored in the model object. To see a summary of the fit, we simply need to print the model object. Notice it returns more output than a model fit with `glm()`, including several discrimination indices.
 
 ```{r}
 library(rms)
-m_rms <- lrm(died ~ age + uncons, 
+m_rms <- lrm(died ~ age + admit + uncons, 
                   data = icu, x = TRUE, y = TRUE)
 m_rms
 ```
@@ -733,7 +748,7 @@ Now we can validate this model using the `validate` function. We set `B=200` to 
 
 We expect to see `index.corrected` values _smaller_ than the `index.orig` values, since the original values have been calculated using the same data to fit the model.
 
-For example, the first row is Somer's D, a measure of discrimination. It takes values between -1 and 1. When Dxy=1, the predictions are perfectly discriminating. The original estimate was 0.5498. Bootstrap validation lowers it to about 0.5304 (at least when I ran it; bootstrapping is based on random resampling so you'll likely see a slightly different corrected value.) Likewise, the second value is R2, which measures the percentage of variation in outcome values explained by the model. We hope to see something close to 1. Orginally it was 0.29, but the bootstrap validation lowers it to about 0.27.
+For example, the first row is Somer's D, a measure of discrimination. It takes values between -1 and 1. When Dxy=1, the predictions are perfectly discriminating. The original estimate was 0.6768. Bootstrap validation lowers it to about 0.6659 (at least when I ran it; bootstrapping is based on random resampling so you'll likely see a slightly different corrected value.) Likewise, the second value is R2, which measures the percentage of variation in outcome values explained by the model. We hope to see something close to 1. Originally it was 0.38, but the bootstrap validation lowers it to about 0.33.
 
 ```{r}
 v <- validate(m_rms, B = 200)
@@ -742,7 +757,7 @@ v
 
 For a summary of what all these statistics mean, see this excellent post at randomeffect.net: https://randomeffect.net/post/2021/05/02/the-rms-validate-function/
 
-Another type of bootstrap validation is _Calibration_. Calibration is the ability of a model to make unbiased estimates of an outcome. The idea is we would like our model to make accurate predictions for a new set of data not used to develop the model. If we don't have new data, we can use bootstrap resampling. Again the `rms` package makes this relatively easy to carry out with the `calibrate` function. Hopefully the solid "Bias-corrected" line will be diagonal with an intercept of 0 and a slope of 1. That would indicate predicted probabilities are corresponding to actual probabilities. What we see below is that from 0.2 - 0.8 our model severely _under-estimates_ the actual probability. For example, when our model returns a predicted probability of 0.5 on the x-axis (predicted probability), the actual probability is about 0.6. The reliability of this model for future data is in doubt.
+Another type of bootstrap validation is _Calibration_. Calibration is the ability of a model to make unbiased estimates of an outcome. The idea is we would like our model to make accurate predictions for a new set of data not used to develop the model. If we don't have new data, we can use bootstrap resampling. Again the `rms` package makes this relatively easy to carry out with the `calibrate` function. Hopefully the solid "Bias-corrected" line will be diagonal with an intercept of 0 and a slope of 1. That would indicate predicted probabilities are corresponding to actual probabilities. What we see below is that from 0.2 - 0.8 our model severely _under-estimates_ the actual probability. For example, when our model returns a predicted probability of 0.5 (on the x-axis), the actual probability is about 0.6. The reliability of this model for future data may be in doubt.
 
 ```{r}
 # run entire chunk at once
