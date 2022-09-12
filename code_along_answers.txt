@@ -1,3 +1,8 @@
+## CODE ALONG 0
+
+Enter a new code chunk and run the code `rbinom(n = 10, size = 1, prob = 0.5)`. This generates random values from Binomial Distribution with trial size = 1 and probability = 0.5. (this is like flipping a fair coin 10 times)
+
+rbinom(n = 10, size = 1, prob = 0.5)
 
 ## CODE ALONG 1
 - create a cross tabulation of admit and died

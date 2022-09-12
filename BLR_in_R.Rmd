@@ -24,10 +24,6 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 
 Enter a new code chunk and run the code `rbinom(n = 10, size = 1, prob = 0.5)`. This generates random values from Binomial Distribution with trial size = 1 and probability = 0.5. (this is like flipping a fair coin 10 times)
 
-```{r}
-rbinom(n = 10, size = 1, prob = 0.5)
-```
-
 
 
 ## Load packages
@@ -95,7 +91,7 @@ The response variable is "died". Let's count the responses using the `xtabs()` f
 xtabs(~ died, data = icu, addNA = TRUE)
 ```
 
-We can get the proportion of each category by using the `proportions()` function. Notice we can "pipe" the result of `xtabs()` into `proportions()` using the base R pipe operator, `|>`
+We can get the proportion of each category by using the `proportions()` function. Notice we can "pipe" the result of `xtabs()` into `proportions()` using the base R pipe operator, `|>`. (The base R pipe operator was introduced in R version 4.1.)
 
 ```{r}
 xtabs(~ died, data = icu) |> proportions()
@@ -133,7 +129,7 @@ Binary logistic regression produces a _model_ that we can use to make probabilit
 - predict probability of death given age, sex, and whether you were unconscious at admission
 - determine how much the probability of dying increases (or decreases) if you were unconscious at admission
 
-_We are responsible for proposing and assessing the model!_ For example, the "sex" variable may or may not help our model. We have to decide to retain it or drop it. Subject matter expertise is just as important as statistical expertise.
+_We are responsible for proposing and assessing the model._ For example, the "sex" variable may or may not help our model. We have to decide to include it or not. Subject matter expertise is just as important as statistical expertise.
 
 One way to fit binary logistic regression models in R is with the `glm()` function. GLM = Generalized Linear Model.
 
@@ -144,7 +140,7 @@ m <- glm(died ~ age + sex + uncons, data = icu, family = binomial)
 summary(m)
 ```
 
-The model is in the Estimate column of the coefficients section. Here's the model expressed in basic math notation, with values rounded to two decimal places:
+The model is in the _Estimate_ column of the coefficients section. Here's the model expressed in basic math notation, with values rounded to two decimal places:
 
 $$\text{died} = -3.58 + 0.03\text{ age} + 0.14\text{ sex} + 3.60\text{ uncons}$$
 
@@ -152,7 +148,7 @@ If we plug in values for `age`, `sex`, and `uncons` we get _predicted log odds_ 
 
 Log odds are also known as _logit_ values. The logit transformation takes probability, which ranges from [0,1], and expresses it as log odds, which ranges from [-Inf,+Inf]. This is desirable since modeling probability directly could produce predictions below 0 or above 1.
 
-Let's make a prediction for a male age 70 who was unconscious at admission. We use the `predict()` function with a data frame containing our predictors.
+Let's use our model to make a prediction for a male age 70 who was unconscious at admission. We use the `predict()` function with a data frame containing our predictors.
 
 ```{r}
 predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"))
@@ -188,7 +184,7 @@ logodds <- log(odds)
 data.frame(p, odds = as.character(odds), logodds)
 ```
 
-No intro logistic regression would be complete without a plot of probability versus log odds. 
+No intro to logistic regression would be complete without a plot of probability versus log odds. Notice that no matter how big or small the log odds, the corresponding probability is always between 0 and 1.
 
 ```{r}
 p <- seq(0.0001, 0.9999, length.out = 1000)
@@ -224,9 +220,19 @@ Our model is comprised of simple additive predictors (ie, _main effects_). There
 coef(m)
 ```
 
-Again these coefficients are on the log odds scale. If we exponentiate them we get _odds ratios_. An odds ratio is a ratio of two odds.
+These coefficients are on the log odds scale. For example, the age coefficient says the log odds of ICU death increase by about 0.028 for every one year increase in age, holding all other variables constant. 
 
-Let's say an event has a probability of 0.8 of happening. The corresponding odds are 4, or 4 to 1. We can expect 4 "successes" for every one "failure". 
+If we _exponentiate the coefficients_ we get _odds ratios_. An odds ratio is a ratio of two odds. For example if we exponentiate the age coefficient, we get 1.028719. 
+
+```{r}
+exp(coef(m)["age"])
+```
+
+This says the odds of ICU death increase by about 1.029 for each one year increase in age. Put another way, the odds of dying when you're 70 are about 3% higher than the odds of dying when you're 69, holding all other variables constant. (Recall that multiplying by 1.03 is the same as increasing by 3%.)
+
+Let's do an odds ratio "by hand".
+
+Say an event has a probability of 0.8 of happening. The corresponding odds are 4, or 4 to 1. We can expect 4 "successes" for every one "failure". 
 
 ```{r}
 # event 1
@@ -235,7 +241,7 @@ odds1 <- p1/(1-p1)
 odds1
 ```
 
-Let's say another event has a probability of 0.6 of happening. The corresponding odds are 1.5.
+Say another event has a probability of 0.6 of happening. The corresponding odds are 1.5.
 
 ```{r}
 # event 2
@@ -260,12 +266,14 @@ Let's look at the odds ratios of our model:
 exp(coef(m))
 ```
 
-Our model claims the odds of dying when unconscious are about 36 times higher than the odds of dying when you are not unconscious. We can calculate this "by hand" by predicting probabilities for, say, two Males aged 60, one who was unconscious and the other who was not:
+Our model claims the odds of dying when unconscious are about 36 times higher than the odds of dying when you are not unconscious! We can calculate this "by hand" by predicting probabilities for, say, two Males aged 60, one who was unconscious and the other who was not:
 
 ```{r}
+# unconscious male, age 60
 p1 <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
                                       uncons = "Yes"),
               type = "response")
+# conscious male, age 60
 p2 <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
                                       uncons = "No"),
               type = "response")
@@ -353,14 +361,14 @@ m0 <- glm(died ~ 1, data = icu, family = binomial)
 coef(m0)
 ```
 
-The intercept coefficient is the predicted _log odds_ of dying. We can convert log odds to probability using the inverse logit, which is available as the `plogis()` function:
+The intercept coefficient is the predicted _log odds_ of dying. We can convert log odds to probability using the inverse logit, which is available as the `plogis()` function. This turns out to be a fancy way to get 0.2.
 
 ```{r}
 # convert log odds to probability
 plogis(coef(m0))
 ```
 
-We can formally assess if a proposed model is better than the NULL model using the `anova()` function. Recall our model `m`
+We can formally assess if a proposed model is better than the NULL model using the base R `anova()` function. Recall our model `m`
 
 ```{r}
 formula(m)
@@ -399,6 +407,8 @@ LRstats(m)
 
 The result of this test fails to provide evidence against the Null. 
 
+See also the "Assessing predictive accuracy" section at the end for more information. 
+
 ## CODE ALONG 3
 
 Assess model `m2` using the methods we just described.
@@ -413,11 +423,13 @@ So far our models only contain _main effects_. The effects are _additive_. It do
 
 We can relax that assumption by allowing variables to _interact_ and to allow variables to have _non-linear_ effects. These make our models more complex and more difficult to interpret. But they also may produce better models that more accurately explain the probability of our response.
 
+Note: more complex models require more data. See the _Minimum sample sizes_ section below.
+
 ### Interactions
 
 When variables interact, that means we cannot untangle their effects. The effect of one depends on another. For example, perhaps the effect of age depends on uncons status. 
 
-Below we allow age and uncons to interact by adding `age:uncons` to the model. That does not mean they really interact. We're simply _allowing them to interact in our model_. The evidence for the hypothesized interaction seems rather week according to the small z value and relatively high p-value.
+Below we allow age and uncons to interact by adding `age:uncons` to the model. That does not mean they really interact. We're simply _allowing them to interact in our model_. The evidence for the hypothesized interaction seems rather weak according to the small z value and relatively high p-value.
 
 ```{r}
 m_int <- glm(died ~ age + sex + uncons + age:uncons, data = icu,
@@ -571,7 +583,7 @@ cbind(obs, pred)
 ```
 
 - Subject 84: model predicts death at 96%, but subject lived
-- Subject 881: one of the older subjects 89 and lived
+- Subject 881: one of the older subjects at age 89 and lived
 - Subject 202: model predicts death at 4%, but subject died
 - Subject 208: subject had Elective admit but arrived unconscious? (typo?)
 
@@ -723,7 +735,7 @@ icu2$fitted <- fitted(mod2)
 icu2[c(39,74),]
 ```
 
-## Assessing predictive accuracy via calibration
+## Assessing predictive accuracy 
 
 How will our model perform for new data that was not used to create the model? _Model validation_ can help us assess this question.
 
@@ -756,6 +768,8 @@ v
 ```
 
 For a summary of what all these statistics mean, see this excellent post at randomeffect.net: https://randomeffect.net/post/2021/05/02/the-rms-validate-function/
+
+See also a blog post I wrote on this topic: https://data.library.virginia.edu/getting-started-with-bootstrap-model-validation/
 
 Another type of bootstrap validation is _Calibration_. Calibration is the ability of a model to make unbiased estimates of an outcome. The idea is we would like our model to make accurate predictions for a new set of data not used to develop the model. If we don't have new data, we can use bootstrap resampling. Again the `rms` package makes this relatively easy to carry out with the `calibrate` function. Hopefully the solid "Bias-corrected" line will be diagonal with an intercept of 0 and a slope of 1. That would indicate predicted probabilities are corresponding to actual probabilities. What we see below is that from 0.2 - 0.8 our model severely _under-estimates_ the actual probability. For example, when our model returns a predicted probability of 0.5 (on the x-axis), the actual probability is about 0.6. The reliability of this model for future data may be in doubt.
 
