@@ -621,7 +621,10 @@ For help with statistical analysis, contact the UVA Library StatLab: `statlab@vi
 
 Below is more material that had to be cut for time.
 
+
+
 ## Cut for time
+
 
 ## Three ways to fit a binary logistic regression model
 
@@ -665,6 +668,7 @@ Next we get the total number of observations for each age and uncons combination
 n <- aggregate(died ~ uncons + age, data = icu, length)
 head(n)
 ```
+
 Finally we combine the data into a data frame. We name the number of observations for each uncons/age combination as "trials" and the proportion of deaths per combination as "proportion".
 
 ```{r}
@@ -676,6 +680,7 @@ icu2 <- data.frame(uncons = x$uncons,
                    proportion = x$died/n$died)
 head(icu2)
 ```
+
 Now we use "proportion" as the response, but also include the argument `weights = trials` to indicate total number of observations at each uncons and age combination.
 
 ```{r}
@@ -735,50 +740,134 @@ icu2$fitted <- fitted(mod2)
 icu2[c(39,74),]
 ```
 
-## Assessing predictive accuracy 
 
-How will our model perform for new data that was not used to create the model? _Model validation_ can help us assess this question.
+## Simulating Binary Data
 
-A common approach to model validation is the _train/test data-splitting approach_, where we hold out a random subset of data (the test set), fit the model to the remaining data (the training set), and then see how well the model performs with the test data. However, this reduces the sample size used for model development and only validates a model fit to a subset of the data. There's also a chance a lucky split could produce unusually low or high predictive accuracy.
+It can be useful to know how to simulate binary data. This can aid in preparing for a study or making power and sample size estimates.
 
-A more efficient approach is _bootstrap validation_. The basic idea is to resample your data with replacement, refit the model, then use the bootstrap model to calculate some statistic using the original data. 
-
-The `rms` package provides the `validate` function for this purpose. However it only works for models fit using `rms` functions. Instead of `glm()`, we need to use `lrm()`. We also need to specify `x = TRUE, y = TRUE` so the original data is stored in the model object. To see a summary of the fit, we simply need to print the model object. Notice it returns more output than a model fit with `glm()`, including several discrimination indices.
+Pretend we want to simulate data for the binary event of a UVA student having a tattoo with probability associated with age and whether or not parent/guardian has tattoo. First generate age and pt (parent has tattoo) variables. Assume a sample size of 200. We'll center the age variable so 0 is the mean.
 
 ```{r}
-library(rms)
-m_rms <- lrm(died ~ age + admit + uncons, 
-                  data = icu, x = TRUE, y = TRUE)
-m_rms
+n <- 200
+set.seed(1)
+age <- sample(18:30, size = n, replace = TRUE)
+age_c <- age - mean(age) # center age so mean is 0.
+pt <- sample(c("no", "yes"), size = n, replace = TRUE)
 ```
 
-Now we can validate this model using the `validate` function. We set `B=200` to specify we want to perform 200 bootstrap resamples. Eleven statistics are calculated. 
-
-- The first column `index.orig` are the original statistics using the fitted model on the data. 
-- The last column `index.corrected` are the "corrected" statistics based on the bootstrap validation. 
-- The `optimism` column summarizes how "optimistic" the original statistic was. The `index.corrected` value is simply the difference between `index.orig` and `optimism`.
-
-We expect to see `index.corrected` values _smaller_ than the `index.orig` values, since the original values have been calculated using the same data to fit the model.
-
-For example, the first row is Somer's D, a measure of discrimination. It takes values between -1 and 1. When Dxy=1, the predictions are perfectly discriminating. The original estimate was 0.6768. Bootstrap validation lowers it to about 0.6659 (at least when I ran it; bootstrapping is based on random resampling so you'll likely see a slightly different corrected value.) Likewise, the second value is R2, which measures the percentage of variation in outcome values explained by the model. We hope to see something close to 1. Originally it was 0.38, but the bootstrap validation lowers it to about 0.33.
+Now use those variables to simulate a response on the _log odds scale_. Let's say each one year increase in age increases the odds of having a tattoo by about 10% and that having a parent with a tattoo increases the odds of having a tattoo by about 65%. This implies coefficients of 0.1 and 0.5, respectively, which I determined through some trial and error. We'll also assume an intercept of -1.73, which implies a probability of 0.15 for having a tattoo if you're the mean age and your parents had no tattoo.
 
 ```{r}
-v <- validate(m_rms, B = 200)
-v
+exp(0.1) # about 10% increase in odds
+exp(0.5) # about 65% increase in odds
+qlogis(0.15) # prob of tattoo at mean age and parents w/out tattoo
 ```
 
-For a summary of what all these statistics mean, see this excellent post at randomeffect.net: https://randomeffect.net/post/2021/05/02/the-rms-validate-function/
-
-See also a blog post I wrote on this topic: https://data.library.virginia.edu/getting-started-with-bootstrap-model-validation/
-
-Another type of bootstrap validation is _Calibration_. Calibration is the ability of a model to make unbiased estimates of an outcome. The idea is we would like our model to make accurate predictions for a new set of data not used to develop the model. If we don't have new data, we can use bootstrap resampling. Again the `rms` package makes this relatively easy to carry out with the `calibrate` function. Hopefully the solid "Bias-corrected" line will be diagonal with an intercept of 0 and a slope of 1. That would indicate predicted probabilities are corresponding to actual probabilities. What we see below is that from 0.2 - 0.8 our model severely _under-estimates_ the actual probability. For example, when our model returns a predicted probability of 0.5 (on the x-axis), the actual probability is about 0.6. The reliability of this model for future data may be in doubt.
+Now calculate tattoo_log_odds as follows.
 
 ```{r}
-# run entire chunk at once
-cal <- calibrate(m_rms, B = 200)
-plot(cal)
-grid()
+tatoo_log_odds <- -1.73 + 0.1*age_c + 0.5*(pt == "yes")
 ```
+
+Next convert the log odds to probability using `plogis`, which returns the inverse logit, or inverse log odds.
+
+```{r}
+tattoo_prob <- plogis(tatoo_log_odds)
+```
+
+Notice our probabilities range from  about 0.09 to 0.35.
+
+```{r}
+summary(tattoo_prob)
+```
+
+Now we can use those probabilities to return a 0 or 1 using the `rbinom()` function. This simulates data from a _binomial distribution_. We will use each individual probability to basically flip a coin with the stated probability and get a 0 or 1.
+
+```{r}
+set.seed(2)
+tattoo <- rbinom(n = n, size = 1, prob = tattoo_prob)
+```
+
+Let's tally up our simulated events.
+
+```{r}
+xtabs(~ tattoo)
+```
+
+A student with a tattoo seems more likely to have a parent with a tattoo. That's according to our simulation specifications.
+
+```{r}
+xtabs( ~ tattoo + pt)
+```
+
+Likelihood of having a tattoo also inreases with age. Again this is per our specification.
+
+```{r}
+plot(factor(tattoo) ~ age)
+```
+
+
+Now let's use `glm()` to work backwards and see how close we get to recovering the true coefficients we used to simulate the data.
+
+```{r}
+mod <- glm(tattoo ~ age_c + pt, family = binomial)
+# True model: -1.73 + 0.1*age_c + 0.5*(pt == "yes")
+summary(mod)
+```
+
+Pretty close, though there is a lot of uncertainty about the pt variable.
+
+Let's pretend this model is the TRUTH about the population. Is 200 subjects a large enough sample to reliably detect the positive effect of a parent having a tattoo on the probability of a student having a tattoo?
+
+We can simulate data and fit a model many times and then see the proportion of times we get a p-value on the pt variable that is below, say, 0.05. For example the following code returns TRUE/FALSE:
+
+```{r}
+coef(summary(mod))["ptyes", "Pr(>|z|)"] < 0.05
+```
+
+We can use the `replicate()` function with this code along with our code above to sample and fit many models and see if we detect the "pt" effect. Simply copy and paste the relevant portions of code from above into the {} for the `expr` argument. Use the `n` argument to specify the number of replications. 
+
+```{r}
+rep.out <- replicate(n = 500, expr = {
+  n <- 200
+  age <- sample(18:30, size = n, replace = TRUE)
+  age_c <- age - mean(age) 
+  pt <- sample(c("no", "yes"), size = n, replace = TRUE)
+  tatoo_log_odds <- -1.73 + 0.1*age_c + 0.5*(pt == "yes")
+  tattoo_prob <- plogis(tatoo_log_odds)
+  tattoo <- rbinom(n = n, size = 1, prob = tattoo_prob)
+  mod <- glm(tattoo ~ age_c + pt, family = binomial)
+  coef(summary(mod))["ptyes", "Pr(>|z|)"] < 0.05
+})
+```
+
+Now take the mean of rep.out, which is a vector of TRUE/FALSE values. This returns the proportion of times we reject the null of no "pt" effect. We might use this as an estimate of power.
+
+```{r}
+mean(rep.out)
+```
+
+It appears this "experiment" is not very powerful to detect the parent effect on having a tattoo, assuming our hypothesized coefficients are true. What if we increase the sample size to 1000?
+
+```{r}
+rep.out <- replicate(n = 500, expr = {
+  n <- 1000
+  age <- sample(18:30, size = n, replace = TRUE)
+  age_c <- age - mean(age)
+  pt <- sample(c("no", "yes"), size = n, replace = TRUE)
+  tatoo_log_odds <- -1.73 + 0.1*age_c + 0.5*(pt == "yes")
+  tattoo_prob <- plogis(tatoo_log_odds)
+  tattoo <- rbinom(n = n, size = 1, prob = tattoo_prob)
+  mod <- glm(tattoo ~ age_c + pt, family = binomial)
+  coef(summary(mod))["ptyes", "Pr(>|z|)"] < 0.05
+})
+mean(rep.out)
+```
+
+This seems much better. But this assumes we have the resources to sample 1000 students.
+
+
+
 
 ## Minimum sample sizes
 
@@ -845,6 +934,51 @@ The final answer is about 662 subjects.
 # installed.packages("pmsampsize")
 library(pmsampsize)
 pmsampsize(type = "b", rsquared = 0.288, parameters = 24, prevalence = 0.174)
+```
+
+## Assessing predictive accuracy 
+
+How will our model perform for new data that was not used to create the model? _Model validation_ can help us assess this question.
+
+A common approach to model validation is the _train/test data-splitting approach_, where we hold out a random subset of data (the test set), fit the model to the remaining data (the training set), and then see how well the model performs with the test data. However, this reduces the sample size used for model development and only validates a model fit to a subset of the data. There's also a chance a lucky split could produce unusually low or high predictive accuracy.
+
+A more efficient approach is _bootstrap validation_. The basic idea is to resample your data with replacement, refit the model, then use the bootstrap model to calculate some statistic using the original data. 
+
+The `rms` package provides the `validate` function for this purpose. However it only works for models fit using `rms` functions. Instead of `glm()`, we need to use `lrm()`. We also need to specify `x = TRUE, y = TRUE` so the original data is stored in the model object. To see a summary of the fit, we simply need to print the model object. Notice it returns more output than a model fit with `glm()`, including several discrimination indices.
+
+```{r}
+library(rms)
+m_rms <- lrm(died ~ age + admit + uncons, 
+                  data = icu, x = TRUE, y = TRUE)
+m_rms
+```
+
+Now we can validate this model using the `validate` function. We set `B=200` to specify we want to perform 200 bootstrap resamples. Eleven statistics are calculated. 
+
+- The first column `index.orig` are the original statistics using the fitted model on the data. 
+- The last column `index.corrected` are the "corrected" statistics based on the bootstrap validation. 
+- The `optimism` column summarizes how "optimistic" the original statistic was. The `index.corrected` value is simply the difference between `index.orig` and `optimism`.
+
+We expect to see `index.corrected` values _smaller_ than the `index.orig` values, since the original values have been calculated using the same data to fit the model.
+
+For example, the first row is Somer's D, a measure of discrimination. It takes values between -1 and 1. When Dxy=1, the predictions are perfectly discriminating. The original estimate was 0.6768. Bootstrap validation lowers it to about 0.6659 (at least when I ran it; bootstrapping is based on random resampling so you'll likely see a slightly different corrected value.) Likewise, the second value is R2, which measures the percentage of variation in outcome values explained by the model. We hope to see something close to 1. Originally it was 0.38, but the bootstrap validation lowers it to about 0.33.
+
+```{r}
+v <- validate(m_rms, B = 200)
+v
+```
+
+For a summary of what all these statistics mean, see this excellent post at randomeffect.net: https://randomeffect.net/post/2021/05/02/the-rms-validate-function/
+
+See also a blog post I wrote on this topic: https://data.library.virginia.edu/getting-started-with-bootstrap-model-validation/
+
+Another type of bootstrap validation is _Calibration_. Calibration is the ability of a model to make unbiased estimates of an outcome. The idea is we would like our model to make accurate predictions for a new set of data not used to develop the model. If we don't have new data, we can use bootstrap resampling. Again the `rms` package makes this relatively easy to carry out with the `calibrate` function. Hopefully the solid "Bias-corrected" line will be diagonal with an intercept of 0 and a slope of 1. That would indicate predicted probabilities are corresponding to actual probabilities. What we see below is that from 0.2 - 0.8 our model severely _under-estimates_ the actual probability. For example, when our model returns a predicted probability of 0.5 (on the x-axis), the actual probability is about 0.6. The reliability of this model for future data may be in doubt.
+
+```{r}
+# run entire chunk at once
+cal <- calibrate(m_rms, B = 200)
+plot(cal)
+grid()
 ```
 
 
