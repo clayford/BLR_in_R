@@ -154,16 +154,31 @@ Let's use our model to make a prediction for a male age 70 who was unconscious a
 predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"))
 ```
 
-The prediction, 2.145, is hard to interpret. To get probability we need to take the _inverse logit_, which converts log odds back to the probability scale. Fortunately we can just set `type = "response"` in the `predict()` function.
+This obtained by plugging those values into our model:
+
+$$2.145 = -3.58 + 0.03(70) + 0.14(1) + 3.60(1)$$
+
+The prediction, 2.145, is hard to interpret. To get probability we need to take
+the _inverse logit_, which converts log odds back to the probability scale. Fortunately we can just set `type = "response"` in the `predict()` function.
 
 ```{r}
 predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"), 
         type = "response")
 ```
 
+How did we get that probability? The formula for the inverse logit is as follows:
+
+$$\text{Probability} =  \frac{e^x}{1 + e^x}$$ 
+We can verify this is how we converted log-odds to probability.
+
+```{r}
+exp(2.145336)/(1 + exp(2.145336))
+```
+
 We predict a very high probability, about 0.90, of dying given you're a 70 year old male who was unconscious at admission to the ICU.
 
 Again we should assess this model and think carefully before we fall in love with our prediction! We'll do this shortly.
+
 
 ## Probability versus Odds versus Log Odds
 
@@ -405,7 +420,7 @@ A second question to consider: _how bad is our model compared to a saturated mod
 LRstats(m)
 ```
 
-The result of this test fails to provide evidence against the Null. 
+The result of this test fails to provide evidence against the Null. That's good.
 
 See also the "Assessing predictive accuracy" section at the end for more information. 
 
