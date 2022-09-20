@@ -355,6 +355,36 @@ predict(m2, newdata = data.frame(age = 50, admit = "Emergency",
 ```
 
 
+## Confidence intervals on predictions
+
+A prediction is just a point estimate. There is some uncertainty in the estimate. A confidence interval helps quantify the uncertainty. Unfortunately the `predict()` function for binary logistic regression models does not provide a confidence interval for predictions. However we can calculate it ourselves.
+
+Earlier we made a prediction for a male, age 60 who was admitted unconscious to the ICU as follows:
+
+```{r}
+predict(m, newdata = data.frame(age = 60, sex = "Male", uncons = "Yes"),
+              type = "response")
+```
+
+While there is no option for a confidence interval, we can request the standard error of the prediction by specifying `se.fit = TRUE`. Notice below we request the predicted log odds instead of the response. This is so we get a standard error on the log odds scale. This will prevent us from having  confidence interval that goes below 0 or above 1. We save to object "pred" for convenience.
+
+```{r}
+pred <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
+                                        uncons = "Yes"),
+                se.fit = TRUE)
+pred
+```
+
+Now we add and subtract 1.96 standard errors to the prediction to get a 95% confidence interval on the log odds scale, and then use the inverse logit to transform to probabilities.
+
+```{r}
+plogis(pred$fit + c(-1,1)*1.96*pred$se.fit) |>
+  round(2)
+```
+
+Below we show how to visualize binary logistic regression models using the ggeffects and effects packages, both of which also calculate confidence intervals for predictions using the same method we just demonstrated. 
+
+
 ## Model assessment
 
 It's easy to use `glm()` to fit a binary logistic model, but is the model "good"? Is one model better than another? How do we know which predictors to keep and which ones to drop? Should we allow interactions or non-linear transformations? _Model building is hard_ and requires equal parts statistical expertise and subject matter expertise. 
@@ -492,7 +522,7 @@ Effect("age", mod = m_nle) |>
 We can make a ggplot2 version of this plot using `ggeffect()` from the ggeffects package. Again we can pipe the result into `plot()`. Set `log.y = TRUE` to get the same re-scaled y-axis as the plot from the effects package. Set to FALSE to rescale and label y-axis on the probability scale.
 
 ```{r}
-ggeffect(model = m_nle, terms = "age") |> 
+ggeffect(model = m_nle, ~ age) |> 
   plot(log.y = TRUE)
 ```
 
@@ -508,7 +538,7 @@ There is a great deal of uncertainty about the effect of age when a patient is u
 We create the same plot using `ggeffect()` with a vector of predictors as well. 
 
 ```{r}
-ggeffect(model = m_int, terms = c("age", "uncons")) |>
+ggeffect(model = m_int, terms = ~ age + uncons) |>
   plot(facets = TRUE)
 ```
 
@@ -815,7 +845,7 @@ A student with a tattoo seems more likely to have a parent with a tattoo. That's
 xtabs( ~ tattoo + pt)
 ```
 
-Likelihood of having a tattoo also inreases with age. Again this is per our specification.
+Likelihood of having a tattoo also increases with age. Again this is per our specification.
 
 ```{r}
 plot(factor(tattoo) ~ age)
