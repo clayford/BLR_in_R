@@ -346,13 +346,6 @@ The effect of age seems small, at least per one year increase. The effect of bei
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
-```{r}
-m2 <- glm(died ~ age + admit + uncons, data = icu, 
-          family = binomial)
-predict(m2, newdata = data.frame(age = 50, admit = "Emergency", 
-                                 uncons = "Yes"),
-        type = "response")
-```
 
 
 ## Confidence intervals on predictions
@@ -378,8 +371,7 @@ pred
 Now we add and subtract 1.96 standard errors to the prediction to get a 95% confidence interval on the log odds scale, and then use the inverse logit to transform to probabilities.
 
 ```{r}
-plogis(pred$fit + c(-1,1)*1.96*pred$se.fit) |>
-  round(2)
+plogis(pred$fit + c(-1,1)*1.96*pred$se.fit)
 ```
 
 Below we show how to visualize binary logistic regression models using the ggeffects and effects packages, both of which also calculate confidence intervals for predictions using the same method we just demonstrated. 
