@@ -35,12 +35,13 @@ library(vcdExtra)
 library(car)
 library(effects)
 library(ggeffects)
+library(emmeans)
 ```
 
 
 ## Proportions and Probability
 
-Pick a UVA student at random. What is the probability they have a tattoo? This is a _binary_ response. Only two possible answers: yes or no. We don't know, so we take a random sample. Let's say we randomly sample 100 students and find that 15 students have tattoos. 
+Pick a UVA student at random. What is the probability they have at least one tattoo? This is a _binary_ response. Only two possible answers: yes or no. We don't know, so we take a random sample. Let's say we randomly sample 100 students and find that 15 students have tattoos. 
 
 The _proportion_, 15/100 = 0.15, could be interpreted as an estimated _probability_ that a UVA student has a tattoo. Recall that proportions and probabilities range from 0 to 1. We might conclude about 15% of UVA students have tattoos, or there's a probability of about 0.15 that a randomly selected UVA student has a tattoo.
 
@@ -97,7 +98,7 @@ We can get the proportion of each category by using the `proportions()` function
 xtabs(~ died, data = icu) |> proportions()
 ```
 
-Just based on this information, a naive estimate of the probability of death (Yes) after admission to the ICU is about 20%. But this probability estimate may change based on other predictors such as patient age, sex, whether or not patient was conscious at ICU admission, etc.
+Just based on this information, a naive estimate of the probability of death (Yes) after admission to the ICU is about 0.20. But this probability estimate may change based on other predictors such as patient age, sex, whether or not patient was conscious at ICU admission, etc.
 
 How does being unconscious at time of admission to ICU affect proportion of deaths? This time we use `xtabs()` to create a cross tabulation, and then pipe into `proportions()` with `margin = 1` to specify we want to calculate proportions for the rows. In other words, find proportion of `died` conditional on `uncons`. Of those who were unconscious at admission about 87% died. But only 15 out of 200 people were unconscious at admission.
 
@@ -168,7 +169,8 @@ predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"),
 
 How did we get that probability? The formula for the inverse logit is as follows:
 
-$$\text{Probability} =  \frac{e^x}{1 + e^x}$$ 
+$$\text{Probability} =  \frac{e^x}{1 + e^x}$$
+
 We can verify this is how we converted log-odds to probability.
 
 ```{r}
@@ -190,7 +192,7 @@ Let's convert a few probabilities to odds and log odds. The function `fractions(
 
 - odds are always positive
 - log odds can be positive or negative
-- small changes in probability can result in "big" changes in log odds. log odds change rapidly when p is close to 0 or 1.
+- small changes in probability can result in "big" changes in log odds. log odds change rapidly when p is close to 0 or 1. In general, never a good idea to round log odds. 
 
 ```{r}
 p <- c(0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999)
@@ -305,34 +307,34 @@ The odds ratio for age is about 1.03. This says the odds of dying increase about
 exp(coef(m)["age"] * 10)
 ```
 
-Every 10 year increase in age increases the odds of dying by about 33%.
+Every 10 year increase in age increases the odds of dying by about 33%, all else held constant.
 
-## Standard errors and hypthesis tests
+## Standard errors and hypothesis tests
 
 If we use `coef()` on `summary()` we extract the coefficient table which contains standard errors, test statistics (z value), and p-values.
 
+```{r}
+coef(summary(m)) 
+```
+
 - Std. Error: quantifies uncertainty of estimated coefficient. It may help to imagine adding and subtracting it to your estimate to get an idea of the variability of your estimate.
 - z value: Ratio of Estimate to Std. Error. Large ratios mean coefficients with relatively small standard errors. z values larger than 2 or 3 are usually considered "big".
-- Pr(>|z|): probability of getting a z value as big or bigger if coefficient is 0, given other predictors already in model.
+- Pr(>|z|): probability of getting a value as big or bigger than |z| if coefficient is 0, given other predictors already in model.
 
 _Altogether this information is used to assess whether predictor coefficients are reliably positive or negative (ie, different from 0)_
-
-```{r}
-coef(summary(m)) |> round(3)
-```
 
 P-values only assess whether a coefficient is different from 0. It's better to assess _direction and magnitude_ of coefficients with confidence intervals. Use `confint()` on the model object.
 
 ```{r}
-confint(m) |> round(3)
+confint(m)
 ```
 
-We're not sure if being Male increases or decreases the chance of dying. The lower bound is negative and the upper bound is positive.
+We're not sure if being Male increases or decreases the chance of dying. The lower bound is negative and the upper bound is positive (though not by much). Probably worth noting that there 124 male subjects in this data set versus only 76 female subjects.
 
 Using `exp()` with `confint()` provides a _confidence interval on the odds ratios_. Of interest here is whether or not the CI crosses 1. A ratio of 1 implies no difference in odds.
 
 ```{r}
-exp(confint(m)) |> round(3)
+exp(confint(m))
 ```
 
 The effect of age seems small, at least per one year increase. The effect of being unconscious seems highly variable. That's because we only have 15 subjects who arrived unconscious.
@@ -374,8 +376,29 @@ Now we add and subtract 1.96 standard errors to the prediction to get a 95% conf
 plogis(pred$fit + c(-1,1)*1.96*pred$se.fit)
 ```
 
-Below we show how to visualize binary logistic regression models using the ggeffects and effects packages, both of which also calculate confidence intervals for predictions using the same method we just demonstrated. 
+We can also use the `ggpredict()` function from the {ggeffects} package to calculate that confidence interval. Instead of supplying new data in data frame we use the `terms` and `condition` arguments. The `terms` are the variables of interest. The `condition` are the variables we want to condition on. Below we arbitrarily set age as the term and sex and uncons as the conditions. `age[60]` says set age to 60. `condition = c(sex = "Male", uncons = "Yes")` says to hold those two variables at "Male" and "Yes", respectively.
 
+```{r}
+ggpredict(m, terms = "age[60]", 
+          condition = c(sex = "Male", uncons = "Yes"))
+```
+
+The term could also be sex with age and uncons defined in the condition.
+
+```{r}
+ggpredict(m, terms = "sex[Male]", 
+          condition = c(age = 60, uncons = "Yes"))
+```
+
+This is admittedly a little weird. `ggpredict()` is usually employed to generate many predictions for a term of interest. For example:
+
+```{r}
+ggpredict(m, terms = "age[30:60 by=5]", 
+          condition = c(sex = "Male", uncons = "Yes"))
+```
+
+
+Below we show how to visualize binary logistic regression models using the {ggeffects} and {effects} packages, both of which calculate confidence intervals for predictions using the same method we just demonstrated. 
 
 ## Model assessment
 
@@ -390,7 +413,7 @@ One question to consider: _is our model better than the NULL model_, where the N
 mean(icu$died == "Yes")
 ```
 
-The NULL model is simply predicting anyone admitted to the ICU has a 20% chance of dying. This is sometimes called the _intercept-only model_, which we can fit as follows:
+The NULL model is simply predicting anyone admitted to the ICU has a 0.20 probability of dying. This is sometimes called the _intercept-only model_, which we can fit as follows:
 
 ```{r}
 # died ~ 1 is the intercept-only model
@@ -425,18 +448,20 @@ Notice that terms are added sequentially, _in order_. This is sometimes called a
 
 Deviance is a _statistical summary of model fit_. A "good" predictor should drop Residual Deviance by more than 1. Notice sex produces no change in deviance, but uncons drops it more than 30.
 
-An alternative to Type I tests are _Type II tests_, which test the contribution of each variable assuming all others are included. The `Anova()` function from the car package produces Type II tests. This technically does not compare the model to the NULL model. However it does allow us to asses each variable's contribution to the model.
+See this article for an explanation of what exactly deviance residuals are:
+https://library.virginia.edu/data/articles/understanding-deviance-residuals
+
+An alternative to Type I tests are _Type II tests_, which test the contribution of each variable assuming all others are included. The base R `drop1()` function produces Type II tests. This technically does not compare the model to the NULL model. However it does allow us to asses each variable's contribution to the model.
 
 ```{r}
-# can also use drop1(m, test = "Chisq")
-Anova(m)
+drop1(m, test = "Chisq")
 ```
 
 The substance of the results are largely the same, however each test assumes the other variables are in the model. For example, adding age to a model with sex and uncons already present appears to improve the model.
 
 ### Is our model worse than the SATURATED model?
 
-A second question to consider: _how bad is our model compared to a saturated model that fits the data perfectly_? The `LRstats()` function from the vcdExtra package helps us to assess this question. It conducts a hypothesis test with the Null being "the model fit is no different from the saturated model". A low p-value provides evidence against this hypothesis.
+A second question to consider: _how bad is our model compared to a saturated model that fits the data perfectly_? The `LRstats()` function from the {vcdExtra} package helps us to assess this question. It conducts a hypothesis test with the Null being "the model fit is no different from the saturated model". A low p-value provides evidence against this hypothesis.
 
 ```{r}
 LRstats(m)
@@ -487,13 +512,13 @@ m_nle <- glm(died ~ ns(age, 2) + sex + uncons, data = icu,
 summary(m_nle)
 ```
 
-It's hard to tell if the spline is necessary based on the summary output. One proper way to assess this is using the `Anova()` function from the car package. This uses a likelihood ratio test to compare the model without the age spline to one with the age spline.
+It's hard to tell if the spline is necessary based on the summary output. One proper way to assess this is using the `anova()` function, where we can compare model with a linear effect age to the model with a nonlinear effect of age. This tests whether or not we need the non-linear term. The null hypothesis of this test is that both models are equally good, which implies we don't need the non-linear effect for age.
 
 ```{r}
-Anova(m_nle)
+anova(m, m_nle, test = "Chisq")
 ```
 
-It looks like it may be worth modeling age as a non-linear effect.
+It appears we don't benefit from the non-linear effect.
 
 
 ## Visualizing models
@@ -504,14 +529,14 @@ The basic idea is to pick a variable of interest, say age, and make predictions 
 
 Below we show two ways to do this using the effects and ggeffects packages. 
 
-First visualize `m_nle` using `Effect()` from the effects package. Notice we can pipe the result into `plot()`. The light blue ribbon is a 95% confidence band. The little ticks at the bottom are the observed values. Notice the ribbon gets larger (more uncertain) when we have fewer observations, which we see in the extremes of the data. It appears the effect of age doesn't change until after about age 55, and then it begins to increase. Also notice the y-axis is on the log-odds scale but labeled with probabilities. (set `type = "response"` to scale and label the y-axis to probabilities.)
+First visualize `m_nle` using `Effect()` from the {effects} package. Notice we can pipe the result into `plot()`. The light blue ribbon is a 95% confidence band. The little ticks at the bottom are the observed values. Notice the ribbon gets larger (more uncertain) when we have fewer observations, which we see in the extremes of the data. It appears the effect of age doesn't change until after about age 55, and then it begins to increase. Also notice the y-axis is on the log-odds scale but labeled with probabilities. (set `type = "response"` to scale and label the y-axis to probabilities.)
 
 ```{r}
 Effect("age", mod = m_nle) |> 
   plot()
 ```
 
-We can make a ggplot2 version of this plot using `ggeffect()` from the ggeffects package. Again we can pipe the result into `plot()`. Set `log.y = TRUE` to get the same re-scaled y-axis as the plot from the effects package. Set to FALSE to rescale and label y-axis on the probability scale.
+We can make a {ggplot2} version of this plot using `ggeffect()` from the ggeffects package. Again we can pipe the result into `plot()`. Set `log.y = TRUE` to get the same re-scaled y-axis as the plot from the {effects} package. Set to FALSE to rescale and label y-axis on the probability scale.
 
 ```{r}
 ggeffect(model = m_nle, ~ age) |> 
@@ -585,7 +610,7 @@ LRstats(m4, m5)
 
 One or two influential observations can completely change a model. For example, a notable interaction may be due to an observation's unusual values. 
 
-An effective plot for quickly assessing influence is the `influencePlot()` function from car package. It plots three difference diagnostics:
+An effective plot for quickly assessing influence is the `influencePlot()` function from {car} package. It plots three difference diagnostics:
 
 1. _residuals_ on y axis: how different is an observed response from its predicted response
 2. _Hat values_ on x axis: measures "leverage", potential impact of a case on the model
@@ -624,7 +649,7 @@ cbind(obs, pred)
 - Subject 202: model predicts death at 4%, but subject died
 - Subject 208: subject had Elective admit but arrived unconscious? (typo?)
 
-One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Here's one way to fit a new model that does not include the influential points identified by `influencePlot`, using `subset = !rownames(icu) %in% rownames(infl)`. Then we compare coefficients from both models using the `compareCoefs()` function from the car package.
+One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Here's one way to fit a new model that does not include the influential points identified by `influencePlot`, using `subset = !rownames(icu) %in% rownames(infl)`. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
 
 ```{r}
 m3a <- glm(died ~ age + admit + uncons + age:uncons,
@@ -651,19 +676,27 @@ _ Compare the model to `m2`.
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
 
-
 ## We're done!
+
+See the appendix for more material cut for time.
 
 For help with statistical analysis, contact the UVA Library StatLab: `statlab@virginia.edu`
 
-Below is more material that had to be cut for time.
+## References
+
+- Friendly M, Meyer D (2016). Discrete Data Analysis with R: Visualization and Modeling Techniques for Categorical and Count Data. CRC Press.
+- Friendly M (2022). _vcdExtra: 'vcd' Extensions and Additions_. R package version 0.8-0, <https://CRAN.R-project.org/package=vcdExtra>.
+- Lemeshow, S., Teres, D., Avrunin, J. S., Pastides, H. (1988). Predicting the Outcome of Intensive Care Unit Patients. Journal of the American Statistical Association, 83, 348-356.
+- John Fox (2003). Effect Displays in R for Generalised Linear Models. Journal of Statistical Software, 8(15), 1-27. doi 10.18637/jss.v008.i15
+- Lüdecke D (2018). "ggeffects: Tidy Data Frames of Marginal Effects from Regression Models." _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772  <https://doi.org/10.21105/joss.00772>.
+- R Core Team (2022). R: A language and environment for statistical  computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
+- Harrell F (2015). Regression Modeling Strategies, 2nd ed. Springer. http://hbiostat.org/rmsc/
 
 
+## Appendix
 
-## Cut for time
 
-
-## Three ways to fit a binary logistic regression model
+### Three ways to fit a binary logistic regression model
 
 The `glm()` function allows binary response data to be structured in three different ways:
 
@@ -673,7 +706,7 @@ The `glm()` function allows binary response data to be structured in three diffe
 
 Let's demonstrate all three ways using a subset of the icu data.
 
-### 1. As a 0/1 indicator
+#### 1. As a 0/1 indicator
 
 Let's say we want to model died as function of uncons and age. Our data is already structured as one row per event with a 0/1 indicator.
 
@@ -682,7 +715,7 @@ mod1 <- glm(died ~ uncons + age, data = icu, family = binomial)
 summary(mod1)
 ```
 
-### 2. As a proportion
+#### 2. As a proportion
 
 To demonstrate this we need to first restructure the data. To begin, we need to set the response as numeric 0 and 1. The died variable is currently a factor.
 
@@ -736,7 +769,7 @@ mod2 <- glm(died/trials ~ uncons + age, data = icu2, family = binomial,
 ```
 
 
-### 3. As a two-column matrix
+#### 3. As a two-column matrix
 
 In this scenario, the response is a two-column matrix, with the first column giving the number of deaths and the second the number of survivors. We need to add number of survivors to our data frame, which is simply the difference between trials and died.
 
@@ -778,7 +811,7 @@ icu2[c(39,74),]
 ```
 
 
-## Simulating Binary Data
+### Simulating Binary Data
 
 It can be useful to know how to simulate binary data. This can aid in preparing for a study or making power and sample size estimates.
 
@@ -906,7 +939,7 @@ This seems much better. But this assumes we have the resources to sample 1000 st
 
 
 
-## Minimum sample sizes
+### Minimum sample sizes
 
 Harrell (2015) shows the minimum sample size required to estimate an intercept-only logistic regression model to within 0.1 of the true probability with 95% confidence is _96_, assuming true probability is 0.5.
 
@@ -973,7 +1006,7 @@ library(pmsampsize)
 pmsampsize(type = "b", rsquared = 0.288, parameters = 24, prevalence = 0.174)
 ```
 
-## Assessing predictive accuracy 
+### Assessing predictive accuracy 
 
 How will our model perform for new data that was not used to create the model? _Model validation_ can help us assess this question.
 
@@ -1019,12 +1052,3 @@ grid()
 ```
 
 
-## References
-
-- Friendly M, Meyer D (2016). Discrete Data Analysis with R: Visualization and Modeling Techniques for Categorical and Count Data. CRC Press.
-- Friendly M (2022). _vcdExtra: 'vcd' Extensions and Additions_. R package version 0.8-0, <https://CRAN.R-project.org/package=vcdExtra>.
-- Lemeshow, S., Teres, D., Avrunin, J. S., Pastides, H. (1988). Predicting the Outcome of Intensive Care Unit Patients. Journal of the American Statistical Association, 83, 348-356.
-- John Fox (2003). Effect Displays in R for Generalised Linear Models. Journal of Statistical Software, 8(15), 1-27. doi 10.18637/jss.v008.i15
-- Lüdecke D (2018). "ggeffects: Tidy Data Frames of Marginal Effects from Regression Models." _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772  <https://doi.org/10.21105/joss.00772>.
-- R Core Team (2022). R: A language and environment for statistical  computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
-- Harrell F (2015). Regression Modeling Strategies, 2nd ed. Springer. http://hbiostat.org/rmsc/
