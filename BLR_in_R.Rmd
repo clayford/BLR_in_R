@@ -35,7 +35,6 @@ library(vcdExtra)
 library(car)
 library(effects)
 library(ggeffects)
-library(emmeans)
 ```
 
 
@@ -100,7 +99,7 @@ xtabs(~ died, data = icu) |> proportions()
 
 Just based on this information, a naive estimate of the probability of death (Yes) after admission to the ICU is about 0.20. But this probability estimate may change based on other predictors such as patient age, sex, whether or not patient was conscious at ICU admission, etc.
 
-How does being unconscious at time of admission to ICU affect proportion of deaths? This time we use `xtabs()` to create a cross tabulation, and then pipe into `proportions()` with `margin = 1` to specify we want to calculate proportions for the rows. In other words, find proportion of `died` conditional on `uncons`. Of those who were unconscious at admission about 87% died. But only 15 out of 200 people were unconscious at admission.
+How does being unconscious at time of admission to ICU affect proportion of deaths? This time we use `xtabs()` to create a cross tabulation, and then pipe into `proportions()` with `margin = 1` to specify we want to calculate proportions for the rows. In other words, find proportion of `died` conditional on `uncons`. Of those who were unconscious at admission about 87% died. Only 15 out of 200 people were unconscious at admission.
 
 ```{r}
 xtabs(~ uncons + died, data = icu) |>
@@ -188,11 +187,11 @@ Let p be probability.
 Odds = p/(1-p).     
 Log odds is log(odds).   
  
-Let's convert a few probabilities to odds and log odds. The function `fractions()` from the MASS package returns fractions, which is usually how odds are expressed. (We use `as.character()` to print the fraction bar.) Notice a few things:
+Let's convert a few probabilities to odds and log odds. The function `fractions()` from the {MASS} package returns fractions, which is usually how odds are expressed. (We use `as.character()` to print the fraction bar.) Notice a few things:
 
 - odds are always positive
 - log odds can be positive or negative
-- small changes in probability can result in "big" changes in log odds. log odds change rapidly when p is close to 0 or 1. In general, never a good idea to round log odds. 
+- small changes in probability can result in "big" changes in log odds. log odds change rapidly when p is close to 0 or 1. _In general, never a good idea to round log odds, especially when dealing with small probabilities. _
 
 ```{r}
 p <- c(0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999)
@@ -212,18 +211,20 @@ plot(logodds, p, type = "l")
 
 R has built-in functions for converting probability to log odds and log odds to probability. 
 
-- `plogis`: convert log odds to probability
-- `qlogis`: convert probability to log odds
+- `qlogis`: convert probability to log odds (logit)
+- `plogis`: convert log odds to probability (inverse logit)
 
 Convert log odds of 2 to probability.
 
 ```{r}
+# inverse logit
 plogis(2)
 ```
 
 Convert probability of 0.8807971 to log odds.
 
 ```{r}
+# logit
 qlogis(0.8807971)
 ```
 
@@ -231,7 +232,7 @@ You probably don't need these functions when doing logistic regression in R, but
 
 ## How to interpret coefficients
 
-Our model is comprised of simple additive predictors (ie, _main effects_). Therefore the coefficients can be interpreted. We can use the `coef()` function to extract the coefficients.
+Our model is comprised of simple additive predictors, or _main effects_. Therefore the coefficients can be interpreted. We can use the `coef()` function to extract the coefficients.
 
 ```{r}
 coef(m)
@@ -294,9 +295,10 @@ p1 <- predict(m, newdata = data.frame(age = 60, sex = "Male",
 p2 <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
                                       uncons = "No"),
               type = "response")
-# odds ratio
+# convert probabilities to odds
 odds_p1 <- p1/(1-p1)
 odds_p2 <- p2/(1-p2)
+# calculate odds ratio
 or <- odds_p1/odds_p2
 cbind(p1, p2, `odds ratio` = or)
 ```
@@ -319,11 +321,18 @@ coef(summary(m))
 
 - Std. Error: quantifies uncertainty of estimated coefficient. It may help to imagine adding and subtracting it to your estimate to get an idea of the variability of your estimate.
 - z value: Ratio of Estimate to Std. Error. Large ratios mean coefficients with relatively small standard errors. z values larger than 2 or 3 are usually considered "big".
-- Pr(>|z|): probability of getting a value as big or bigger than |z| if coefficient is 0, given other predictors already in model.
+- Pr(>|z|): probability of getting a value as big or bigger than |z| if coefficient is 0, given other predictors already in model. This two-sided probability is calculated using a standard Normal distribution, N(0,1).
 
-_Altogether this information is used to assess whether predictor coefficients are reliably positive or negative (ie, different from 0)_
+For example, z-value for sexMale is 0.3360447. To get p-value, find probability z is greater than 0.3360447 and less than -0.3360447. Since Normal distribution is symmetric, just need to find one and multiply by 2. 
 
-P-values only assess whether a coefficient is different from 0. It's better to assess _direction and magnitude_ of coefficients with confidence intervals. Use `confint()` on the model object.
+```{r}
+# prob z > 0.3360447
+pnorm(0.3360447, lower.tail = FALSE) * 2
+```
+
+Altogether this information is used to assess whether predictor coefficients are reliably positive or negative (i.e., different from 0)
+
+P-values only assess whether a coefficient is different from 0. It's better to assess _direction and magnitude_ of coefficients with _confidence intervals_. Use `confint()` on the model object.
 
 ```{r}
 confint(m)
@@ -523,41 +532,57 @@ It appears we don't benefit from the non-linear effect.
 
 ## Visualizing models
 
-Adding interactions and/or non-linear terms make model interpretation extremely difficult. One way to make sense of your model is to use _effect displays_, or _effect plots_. 
+Adding interactions and/or non-linear terms make model interpretation extremely difficult. One way to make sense of your model is to use _effect plots_. 
 
 The basic idea is to pick a variable of interest, say age, and make predictions for it over a range of values while holding other predictors constant.
 
-Below we show two ways to do this using the effects and ggeffects packages. 
+Below we show how to do this using the {ggeffects} package. 
 
-First visualize `m_nle` using `Effect()` from the {effects} package. Notice we can pipe the result into `plot()`. The light blue ribbon is a 95% confidence band. The little ticks at the bottom are the observed values. Notice the ribbon gets larger (more uncertain) when we have fewer observations, which we see in the extremes of the data. It appears the effect of age doesn't change until after about age 55, and then it begins to increase. Also notice the y-axis is on the log-odds scale but labeled with probabilities. (set `type = "response"` to scale and label the y-axis to probabilities.)
+First we'll visualize `m_nle` using `ggpredict()`. The first argument is our model object, the second argument specifies which variable, or model term, we wish to visualize. This produces predictions at various ages while holding sex and uncons at "Female" and "No", respectively. These are the reference levels for each variable.
 
 ```{r}
-Effect("age", mod = m_nle) |> 
+ggpredict(m_nle, terms = "age")
+```
+
+We can pipe this result into `plot()` to get a basic effect plot. The light gray ribbon is a 95% confidence band. Notice the ribbon gets larger (more uncertain) when we have fewer observations, which we see in the extremes of the data. It appears the effect of age doesn't change until after about age 55, and then it begins to increase. 
+
+```{r}
+ggpredict(m_nle, terms = "age") |> 
   plot()
 ```
 
-We can make a {ggplot2} version of this plot using `ggeffect()` from the ggeffects package. Again we can pipe the result into `plot()`. Set `log.y = TRUE` to get the same re-scaled y-axis as the plot from the {effects} package. Set to FALSE to rescale and label y-axis on the probability scale.
+If we want to condition on sex = "Male" and uncons = "Yes", we can set them using the condition argument. They need to be specified using a vector. Notice how large the confidence ribbon gets since we have relatively few people were unconscious when admitted to the icu.
 
 ```{r}
-ggeffect(model = m_nle, ~ age) |> 
+ggpredict(m_nle, terms = "age", 
+          condition = c(sex = "Male", uncons = "Yes")) |>
+  plot()
+```
+
+Notice the plots above are on the probability scale, which is usually desirable. But the fitted lines will usually curve reflecting the non-linear transformation from log odds to probabilities. 
+
+We can make the plots on the log-odds scale but label them with probabilities by setting `log.y = TRUE`. This will generate plotted lines that reflect the coefficients in the model. For example, in m_nle, age is modeled as a non-linear effect. By setting `log.y = TRUE` we can see the fitted non-linear effect. Notice the curve is slight and could easily fit within the confidence ribbon as a straight line. (Recall the non-linear coefficient was not significant.) Also notice the uneven spacings on the y-axis.
+
+```{r}
+ggpredict(m_nle, terms = "age") |> 
   plot(log.y = TRUE)
 ```
 
-Next, we visualize m_int which models an interaction between age and uncons. This allows the effect of uncons to depend on age, and vice versa. (Recall the interaction was small and the p-value was about 0.11.) Using `Effect()`, we specify both variables as the focal predictors. The first variable will be plotted on the x-axis.
+
+Next, we visualize m_int which models an interaction between age and uncons. This allows the effect of uncons to depend on age, and vice versa. (Recall the interaction was small and the p-value was about 0.11.) Using `ggpredict()`, we specify the variables of interest as a vector. The first variable will be plotted on the x-axis. The syntax `age[all]` tells `ggpredict()` to use all age values when making predictions.
 
 ```{r}
-Effect(focal.predictors = c("age", "uncons"), mod = m_int) |>
-  plot(type = "response")
+ggpredict(m_int, terms = c("age[all]", "uncons")) |>
+  plot()
 ```
 
-There is a great deal of uncertainty about the effect of age when a patient is unconscious. That's because of the 200 patients, only 15 were admitted unconscious. And no one under the age of 40 was unconscious when admitted to the ICU.
-
-We create the same plot using `ggeffect()` with a vector of predictors as well. 
+There is a great deal of uncertainty about the effect of age when a patient is unconscious. That's because of the 200 patients, only 15 were admitted unconscious. And no one under the age of 40 was unconscious when admitted to the ICU. By setting `log.y = TRUE` we can plot on log odds scale but label the axis with probabilities. In addition we can separate the plots using `facet=TRUE`.
 
 ```{r}
-ggeffect(model = m_int, terms = ~ age + uncons) |>
-  plot(facets = TRUE)
+ggpredict(m_int, terms = c("age[all]", "uncons")) |>
+  plot(log.y = TRUE, facet = TRUE)
 ```
+
 
 
 ## CODE ALONG 4
@@ -839,7 +864,7 @@ Now calculate tattoo_log_odds as follows.
 tatoo_log_odds <- -1.73 + 0.1*age_c + 0.5*(pt == "yes")
 ```
 
-Next convert the log odds to probability using `plogis`, which returns the inverse logit, or inverse log odds.
+Next convert the log odds to probability using `plogis()`, which returns the inverse logit, or inverse log odds.
 
 ```{r}
 tattoo_prob <- plogis(tatoo_log_odds)
