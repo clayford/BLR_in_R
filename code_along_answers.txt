@@ -43,7 +43,7 @@ LRstats(m2)
 
 ## CODE ALONG 4
 
-- Fit a new model with the following formula and save as `m3`. (Systolic is the systolic blood pressure at admission): 
+- Fit a new model with the following formula and save as `m3`:
   `died ~ age + admit + uncons + age:uncons`   
 - Does the interaction seem necessary?
 - Visualize the interaction.
@@ -71,7 +71,7 @@ m6 <- glm(died ~ systolic + admit + uncons, data = icu,
           family = binomial)
 summary(m6)
 infl_m6 <- influencePlot(m6)
-icu["921",]
-
+infl_m6
+icu[200,] # highest systolic value in the data
 LRstats(m2, m6)
 

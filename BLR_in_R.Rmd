@@ -76,8 +76,6 @@ names(icu)
 - cancer: Cancer part of present problem? (No or Yes)
 - systolic: Systolic blood pressure at admission (mm Hg)
 - admit: Type of admission (Elective or Emergency)
-- ph: pH from initial blood gases (>=7.25 or <7.25)
-- pco: partial pressure of carbon dioxide (PCO2) (<=45 or >45)
 - uncons: patient unconscious at admission? (No or Yes)
 
 The goal today is to teach the basics of Binary Logistic Regression by developing a model to predict the probability of death after admission to this ICU and to study the risk factors associated with ICU mortality. 
@@ -614,7 +612,7 @@ Of course that didn't really change the plot all that much.
 
 ## CODE ALONG 4
 
-- Fit a new model with the following formula and save as `m3`. (Systolic is the systolic blood pressure at admission): 
+- Fit a new model with the following formula and save as `m3`: 
   `died ~ age + admit + uncons + age:uncons`   
 - Does the interaction seem necessary?
 - Visualize the interaction.
@@ -675,6 +673,7 @@ Let's use this plot with our `m3` model.
 ```{r}
 m3 <- glm(died ~ age + admit + uncons + age:uncons,
           data = icu, family = binomial)
+summary(m3)
 ```
 
 Assigning the result creates a data frame of the most influential values.
@@ -698,28 +697,21 @@ obs <- icu[rownames(infl), c("died", "age", "cancer",
 cbind(obs, pred)
 ```
 
-- Subject 84: model predicts death at 96%, but subject lived
-- Subject 881: one of the older subjects at age 89, arrived uncons, and lived
-- Subject 202: model predicts death at 4%, but subject died
-- Subject 208: subject had Elective admit but arrived unconscious? (typo?)
+- Subject 18: model predicts death at 96%, but subject lived
+- Subject 151: one of the older subjects at age 89, arrived uncons, and lived
+- Subject 170: model predicts death at 4%, but subject died
+- Subject 172: subject had Elective admit but arrived unconscious? (typo?)
 
-One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Let's drop subject 881 since they have the highest Cook's D value. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
+One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Let's drop subject 151 since they have the high Cook's D value. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
 
 ```{r}
 m3a <- glm(died ~ age + admit + uncons + age:uncons,
           data = icu, family = binomial, 
-          subset = !rownames(icu) %in% rownames(infl))
+          subset = -151)
 compareCoefs(m3, m3a)
 ```
 
-Removing the four influential observations absolutely blows up the standard errors! That's because we now have cells with 0 counts.
-
-```{r}
-xtabs(~ died + uncons + admit, data = icu, 
-      subset = !rownames(icu) %in% rownames(infl))
-```
-
-Be careful about reflexively dropping observations, "influential" or otherwise.
+By dropping subject 155, the coefficient of the uncons main effect dropped from 13.13 to 2.46, and the age:uncons interaction reversed sign and saw an increase in standard error. This doesn't necessarily mean we should remove this subject from the analysis. It just means they're influencing the model and we should exercise caution and modesty in drawing conclusions.
 
 ## CODE ALONG 5
 
