@@ -583,6 +583,33 @@ ggpredict(m_int, terms = c("age[all]", "uncons")) |>
   plot(log.y = TRUE, facet = TRUE)
 ```
 
+If we reverse the order of variables in the `terms` argument we get uncons on the x-axis and age set to 3 distinct values (mean of age and +/- 1 standard deviation.
+
+```{r}
+ggpredict(m_int, terms = c("uncons", "age")) |>
+  plot()
+```
+
+```{r}
+mean(icu$age)
+mean(icu$age) + c(-1,1)*sd(icu$age)
+```
+
+Standard deviation is really only appropriate if your data is symmetric and age is certainly not symmetric.
+
+```{r}
+hist(icu$age)
+```
+
+Fortunately we can set our own values for age when we create the effect plot. Below we get the 25th, 50th, and 75th percentiles of age, save as a vector named "v", and then use that object in the call to `ggpredict()`.
+
+```{r}
+v <- quantile(icu$age, probs = c(0.25, 0.50, 0.75))
+ggpredict(m_int, terms = c("uncons", "age[v]")) |>
+  plot()
+```
+
+Of course that didn't really change the plot all that much. 
 
 
 ## CODE ALONG 4
@@ -602,6 +629,8 @@ We can compare models by using criteria such as AIC and BIC as well as hypothesi
 AIC and BIC are statistics for measuring goodness of fit. In isolation these values are not meaningful, but when compared for different models with the same response, _lower values are better_. The `LRstats` function shows both criteria. Let's compare models `m` and `m2`:
 
 ```{r}
+formula(m)
+formula(m2)
 LRstats(m, m2)
 ```
 
@@ -654,7 +683,7 @@ Assigning the result creates a data frame of the most influential values.
 infl <- influencePlot(m3)
 ```
 
-Here are the exact values of the labeled points. Nothing is too outrageous. A Cook's D bigger than 1 is the usual red flag. A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). Residuals larger than 2.5 may be of interest.
+Here are the exact values of the labeled points. A Cook's D bigger than 1 is the usual red flag. A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). Residuals larger than 2.5 may be of interest.
 
 ```{r}
 infl
@@ -670,11 +699,11 @@ cbind(obs, pred)
 ```
 
 - Subject 84: model predicts death at 96%, but subject lived
-- Subject 881: one of the older subjects at age 89 and lived
+- Subject 881: one of the older subjects at age 89, arrived uncons, and lived
 - Subject 202: model predicts death at 4%, but subject died
 - Subject 208: subject had Elective admit but arrived unconscious? (typo?)
 
-One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Here's one way to fit a new model that does not include the influential points identified by `influencePlot`, using `subset = !rownames(icu) %in% rownames(infl)`. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
+One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Let's drop subject 881 since they have the highest Cook's D value. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
 
 ```{r}
 m3a <- glm(died ~ age + admit + uncons + age:uncons,

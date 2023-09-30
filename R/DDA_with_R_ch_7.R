@@ -365,8 +365,9 @@ data("ICU", package = "vcdExtra")
 names(ICU)
 ICU <- ICU[,-c(4,20)]
 
-ICU2 <- ICU[,c("died", "age", "sex", "cancer", "systolic", "admit", "ph", "pco", "uncons")]
-saveRDS(ICU2, file = "data/icu.rds")
+ICU2 <- ICU[,c("died", "age", "sex", "cancer", "systolic", "admit", "uncons")]
+rownames(ICU2) <- NULL
+saveRDS(ICU2, file = "../data/icu.rds")
 
 # fit full model
 icu.full <- glm(died ~ ., data = ICU, family = binomial)
