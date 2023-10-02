@@ -33,7 +33,6 @@ We'll use the following packages in this workshop.
 ```{r}
 library(vcdExtra)
 library(car)
-library(effects)
 library(ggeffects)
 ```
 
@@ -78,7 +77,7 @@ names(icu)
 - admit: Type of admission (Elective or Emergency)
 - uncons: patient unconscious at admission? (No or Yes)
 
-The goal today is to teach the basics of Binary Logistic Regression by developing a model to predict the probability of death after admission to this ICU and to study the risk factors associated with ICU mortality. 
+The goal today is to learn the basics of Binary Logistic Regression by developing a model to predict the probability of death after admission to this ICU and to study the risk factors associated with ICU mortality. 
 
 
 ## Explore the ICU Data
@@ -111,10 +110,18 @@ How does age relate to the proportion of died? Plotting a factor as a function o
 plot(died ~ age, data = icu)
 ```
 
+A nice complement to the spineplot is the _stripchart_, which is basically one-dimensional scatter plot. This time we plot age as a function of died using the syntax `age ~ died`. Set `method = "jitter"` to prevent over-plotting.
+
+```{r}
+stripchart(age ~ died, data = icu, method = "jitter")
+```
+
+
 ## CODE ALONG 1
 
 - create a cross tabulation of admit and died
-- Plot `died` as a function of `systolic`.
+- Plot `died` as a function of `systolic` (spineplot).
+- Plot `systolic` as a function of `died` (stripchart).
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
@@ -164,7 +171,7 @@ predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"),
         type = "response")
 ```
 
-How did we get that probability? The formula for the inverse logit is as follows:
+How did we get that probability? The formula for the _inverse logit_ is as follows:
 
 $$\text{Probability} =  \frac{e^x}{1 + e^x}$$
 
@@ -857,7 +864,7 @@ icu2[c(39,74),]
 ```
 
 
-### Simulating Binary Data
+### Simulating data for logistic regression
 
 It can be useful to know how to simulate binary data. This can aid in preparing for a study or making power and sample size estimates.
 

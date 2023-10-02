@@ -11,6 +11,7 @@ rbinom(n = 10, size = 1, prob = 0.5)
 
 xtabs(~ admit + died, data = icu)
 plot(died ~ systolic, data = icu)
+stripchart(systolic ~ died, data = icu, method = "jitter")
 
 ## CODE ALONG 2
 
