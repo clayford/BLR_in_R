@@ -145,6 +145,14 @@ m <- glm(died ~ age + sex + uncons, data = icu, family = binomial)
 summary(m)
 ```
 
+Before we talk about the model, let's explain the stuff at the bottom:
+
+- `(Dispersion parameter for binomial family taken to be 1)` This is a _GLM dispersion parameter_ that can be used to increase the standard errors of the coefficients. Since it's set to 1, the standard errors are not increased. This comes into play if we fit _quasibinomial_ models, which are sometimes used when a binomial response is more variable than expected (overdispersion).
+- `Null deviance: 200.16` This is the sum of squared deviance residuals for a model with just an intercept and no predictors (i.e., proportion of died). This is meant to be compared with...
+- `Residual deviance: 159.36` This is the sum of squared deviance residuals for the model we fit. Ideally it will be _substantially lower_ than the Null deviance. "When k [informative] predictors are added to a model, we expect deviance to decrease by more than k." (Gelman and Hill, 2006) In this case we'd like to see residual deviance less than 197, which we do.
+- `AIC: 167.36` This refers to Akaike's Information Criterion. By itself it doesn't mean anything. We use it to compare models. Lower AIC is better. More on this later. 
+- `Number of Fisher Scoring iterations: 5` This refers to the iterative numerical algorithm that estimated the parameters. The default maximum iterations is 25. This model only required 5 iterations. There's is purely informational. 
+
 The model is in the _Estimate_ column of the coefficients section. Here's the model expressed in basic math notation, with values rounded to two decimal places:
 
 $$\text{died} = -3.58 + 0.03\text{ age} + 0.14\text{ sex} + 3.60\text{ uncons}$$
@@ -737,10 +745,11 @@ For help with statistical analysis, contact the UVA Library StatLab: `statlab@vi
 
 ## References
 
+-  Fox J, Weisberg S (2019). _An R Companion to Applied Regression_, Third edition. Sage, Thousand Oaks CA. <https://socialsciences.mcmaster.ca/jfox/Books/Companion/>.
 - Friendly M, Meyer D (2016). Discrete Data Analysis with R: Visualization and Modeling Techniques for Categorical and Count Data. CRC Press.
 - Friendly M (2022). _vcdExtra: 'vcd' Extensions and Additions_. R package version 0.8-0, <https://CRAN.R-project.org/package=vcdExtra>.
-- Lemeshow, S., Teres, D., Avrunin, J. S., Pastides, H. (1988). Predicting the Outcome of Intensive Care Unit Patients. Journal of the American Statistical Association, 83, 348-356.
-- John Fox (2003). Effect Displays in R for Generalised Linear Models. Journal of Statistical Software, 8(15), 1-27. doi 10.18637/jss.v008.i15
+- Gelman A, Hill J (2006). _Data Analysis Using Regression and Multilevel/Hierarchical Models_. Cambridge University Press.
+- Lemeshow S, Teres D, Avrunin JS, Pastides H. (1988). Predicting the Outcome of Intensive Care Unit Patients. Journal of the American Statistical Association, 83, 348-356.
 - Lüdecke D (2018). "ggeffects: Tidy Data Frames of Marginal Effects from Regression Models." _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772  <https://doi.org/10.21105/joss.00772>.
 - R Core Team (2022). R: A language and environment for statistical  computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
 - Harrell F (2015). Regression Modeling Strategies, 2nd ed. Springer. http://hbiostat.org/rmsc/
