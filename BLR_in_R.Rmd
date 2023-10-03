@@ -324,6 +324,42 @@ exp(coef(m)["age"] * 10)
 
 Every 10 year increase in age increases the odds of dying by about 33%, all else held constant.
 
+Odds ratios only express _relative_ differences. A large odds ratio does not mean _absolute_ probabilities are large. It can help to take the _difference in predicted probabilities_ to put odds ratios in perspective.
+
+Let's revisit this statement: "Every 10 year increase in age increases the odds of dying by about 33%, all else held constant."
+
+Predicted probability a female age 50 who arrives conscious dies in ICU:
+
+```{r}
+pred1 <- predict(m, 
+                 newdata = data.frame(age = 50, sex = "Female", 
+                                      uncons = "No"),
+                 type = "response")
+```
+
+Predicted probability a female age 40 who arrives conscious dies in ICU:
+
+```{r}
+pred2 <- predict(m, 
+                 newdata = data.frame(age = 40, sex = "Female", 
+                                      uncons = "No"),
+                 type = "response")
+```
+
+Verify odds ratio from above by literally calculating odds ratio:
+
+```{r}
+(pred1/(1 - pred1))/
+  (pred2/(1 - pred2))
+```
+
+But look at the predicted probabilities and absolute difference. They're all quite low.
+
+```{r}
+cbind("age 50" = pred1, "age 40" = pred2, "Diff" = pred1 - pred2)
+```
+
+
 ## Standard errors and hypothesis tests
 
 If we use `coef()` on `summary()` we extract the coefficient table which contains standard errors, test statistics (z value), and p-values.
