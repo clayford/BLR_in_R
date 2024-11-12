@@ -365,7 +365,7 @@ cbind("age 50" = pred1, "age 40" = pred2, "Diff" = pred1 - pred2)
 If we use `coef()` on `summary()` we extract the coefficient table which contains standard errors, test statistics (z value), and p-values.
 
 ```{r}
-coef(summary(m)) 
+coef(summary(m)) |> round(3)
 ```
 
 - Std. Error: quantifies uncertainty of estimated coefficient. It may help to imagine adding and subtracting it to your estimate to get an idea of the variability of your estimate.
@@ -610,7 +610,7 @@ ggpredict(m_nle, terms = "age",
 
 Notice the plots above are on the probability scale, which is usually desirable. But the fitted lines will usually curve reflecting the non-linear transformation from log odds to probabilities. 
 
-We can make the plots on the log-odds scale but label them with probabilities by setting `log.y = TRUE`. This will generate plotted lines that reflect the coefficients in the model. For example, in m_nle, age is modeled as a non-linear effect. By setting `log.y = TRUE` we can see the fitted non-linear effect. Notice the curve is slight and could easily fit within the confidence ribbon as a straight line. (Recall the non-linear coefficient was not significant.) Also notice the uneven spacings on the y-axis.
+We can make the plots on the log-odds scale but label them with probabilities by setting `log.y = TRUE`. This will generate plotted lines that reflect the coefficients in the model. For example, in m_nle, age is modeled as a non-linear effect. By setting `log.y = TRUE` we can see the fitted non-linear effect. Notice the curve is slight and could easily fit within the confidence ribbon as a straight line. (Recall the non-linear coefficient was not significant.) Also notice the uneven spacing on the y-axis.
 
 ```{r}
 ggpredict(m_nle, terms = "age") |> 
@@ -826,6 +826,7 @@ Next we get the total deaths for each uncons and age combination. For example, w
 ```{r}
 # sum of died by uncons and age
 x <- aggregate(died ~ uncons + age, data = icu, sum)
+# look at rows for ages 72 - 75
 x[x$age %in% 72:75,]
 ```
 
@@ -864,6 +865,7 @@ We could also use trials and died on-the-fly by entering `died/trials` as the re
 ```{r}
 mod2 <- glm(died/trials ~ uncons + age, data = icu2, family = binomial,
             weights = trials)
+summary(mod2)
 ```
 
 
