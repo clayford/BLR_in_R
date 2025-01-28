@@ -34,6 +34,7 @@ We'll use the following packages in this workshop.
 library(vcdExtra)
 library(car)
 library(ggeffects)
+library(emmeans)
 ```
 
 
@@ -43,7 +44,7 @@ Pick a UVA student at random. What is the probability they have at least one tat
 
 The _proportion_, 15/100 = 0.15, could be interpreted as an estimated _probability_ that a UVA student has a tattoo. Recall that proportions and probabilities range from 0 to 1. We might conclude about 15% of UVA students have tattoos, or there's a probability of about 0.15 that a randomly selected UVA student has a tattoo.
 
-What if we sampled 100 males and 100 females and compared the proportion with tattoos? Perhaps 0.18 of males have tattoos and 0.12 of females have tattoos. This suggests the probability of having a tattoo may be related to sex.
+What if we sampled 100 males and 100 females and compared the proportion with tattoos? Perhaps 0.18 of males have tattoos and 0.12 of females have tattoos. This suggests the probability of having a tattoo may be related to gender.
 
 What if we also collected other information such as cumulative GPA or Greek life (yes or no)? Again this suggests the probability of having a tattoo may be related to multiple _variables_ or _predictors_.
 
@@ -57,7 +58,7 @@ Statistical modeling boils down to 3 steps:
 
 ## Load Data for the workshop
 
-Today we'll work with data on Intensive Care Unit (ICU) admissions. This data are a sample of 200 subjects who were part of a much larger study on survival of patients following admission to an adult ICU, derived from Hosmer, Lemeshow and Sturdivant (2013) and included with the vcdExtra package, Friendly (2022).
+Today we'll work with data on Intensive Care Unit (ICU) admissions. This data are a sample of 200 subjects who were part of a much larger study on survival of patients following admission to an adult ICU (Hosmer, Lemeshow and Sturdivant 2013) and included with the {vcdExtra} package, (Friendly 2022).
 
 Below we read in the data from GitHub where it is stored as an _rds_ file. The rds format is an efficient way to store R objects. To read in an rds file we use the `readRDS()` function. To read in from a web site, we need to use the `url()` function to open a connection to the site.
 
@@ -88,7 +89,7 @@ The response variable is "died". Let's count the responses using the `xtabs()` f
 xtabs(~ died, data = icu, addNA = TRUE)
 ```
 
-We can get the proportion of each category by using the `proportions()` function. Notice we can "pipe" the result of `xtabs()` into `proportions()` using the base R pipe operator, `|>`. (The base R pipe operator was introduced in R version 4.1.)
+We can get the proportion of each category by using the `proportions()` function. Notice we can "pipe" the result of `xtabs()` into `proportions()` using the base R pipe operator, `|>`. (The base R pipe operator was introduced in R version 4.1.) A keyboard shortcut to insert the pipe operator is *Ctrl + Shift + M* (Win/Linux) or *Cmd + Shift + M* (Mac)
 
 ```{r}
 xtabs(~ died, data = icu) |> proportions()
@@ -101,7 +102,7 @@ How does being unconscious at time of admission to ICU affect proportion of deat
 ```{r}
 xtabs(~ uncons + died, data = icu) |>
   proportions(margin = 1) |>
-  round(3)
+  round(2)
 ```
 
 How does age relate to the proportion of died? Plotting a factor as a function of a numeric variable using `plot()` creates a _spineplot_. The x-axis groups age into categories. Each vertical box shows the proportion of died within each age category. The width of the box corresponds to the proportion of age categories. Age 60 - 70 appears to be the largest group. It appears the proportion of deaths creeps up with increasing age.
@@ -136,7 +137,7 @@ Binary logistic regression produces a _model_ that we can use to make probabilit
 
 _We are responsible for proposing and assessing the model._ For example, the "sex" variable may or may not help our model. We have to decide to include it or not. Subject matter expertise is just as important as statistical expertise.
 
-One way to fit binary logistic regression models in R is with the `glm()` function. GLM = Generalized Linear Model.
+The most common way to fit binary logistic regression models in R is with the `glm()` function. GLM = Generalized Linear Model.
 
 Let's fit a model. Notice we must set `family = binomial` because our response is binary. We almost always want to save the model result. The formula says "model `died` as a function of `age`, `sex`, and `uncons`." Call `summary()` on the model object to see the result.
 
@@ -144,14 +145,6 @@ Let's fit a model. Notice we must set `family = binomial` because our response i
 m <- glm(died ~ age + sex + uncons, data = icu, family = binomial)
 summary(m)
 ```
-
-Before we talk about the model, let's explain the stuff at the bottom:
-
-- `(Dispersion parameter for binomial family taken to be 1)` This is a _GLM dispersion parameter_ that can be used to increase the standard errors of the coefficients. Since it's set to 1, the standard errors are not increased. This comes into play if we fit _quasibinomial_ models, which are sometimes used when a binomial response is more variable than expected (overdispersion).
-- `Null deviance: 200.16` This is the sum of squared deviance residuals for a model with just an intercept and no predictors (i.e., proportion of died). This is meant to be compared with...
-- `Residual deviance: 159.36` This is the sum of squared deviance residuals for the model we fit. Ideally it will be _substantially lower_ than the Null deviance. "When k [informative] predictors are added to a model, we expect deviance to decrease by more than k." (Gelman and Hill, 2006) In this case we'd like to see residual deviance less than 197, which we do.
-- `AIC: 167.36` This refers to Akaike's Information Criterion. By itself it doesn't mean anything. We use it to compare models. Lower AIC is better. More on this later. 
-- `Number of Fisher Scoring iterations: 5` This refers to the iterative numerical algorithm that estimated the parameters. The default maximum iterations is 25. This model only required 5 iterations. There's is purely informational. 
 
 The model is in the _Estimate_ column of the coefficients section. Here's the model expressed in basic math notation, with values rounded to two decimal places:
 
@@ -171,8 +164,7 @@ This obtained by plugging those values into our model:
 
 $$2.145 = -3.58 + 0.03(70) + 0.14(1) + 3.60(1)$$
 
-The prediction, 2.145, is hard to interpret. To get probability we need to take
-the _inverse logit_, which converts log odds back to the probability scale. Fortunately we can just set `type = "response"` in the `predict()` function.
+The prediction, 2.145, is hard to interpret. To get probability we need to take the _inverse logit_, which converts log odds back to the probability scale. Fortunately we can just set `type = "response"` in the `predict()` function.
 
 ```{r}
 predict(m, newdata = data.frame(age = 70, sex = "Male", uncons = "Yes"), 
@@ -193,6 +185,26 @@ We predict a very high probability, about 0.90, of dying given you're a 70 year 
 
 Again we should assess this model and think carefully before we fall in love with our prediction! We'll do this shortly.
 
+Let's review the stuff at the bottom of the model summary:
+
+```
+(Dispersion parameter for binomial family taken to be 1)
+
+    Null deviance: 200.16  on 199  degrees of freedom
+Residual deviance: 159.36  on 196  degrees of freedom
+AIC: 167.36
+
+Number of Fisher Scoring iterations: 5
+
+```
+
+- `(Dispersion parameter for binomial family taken to be 1)` This is a _GLM dispersion parameter_ that can be used to increase the standard errors of the coefficients. Since it's set to 1, the standard errors are not increased. This comes into play if we fit _quasibinomial_ models, which are sometimes used when a binomial response is more variable than expected (overdispersion).
+- `Null deviance: 200.16` This is the sum of squared deviance residuals for a model with just an intercept and no predictors (i.e., proportion of died). This is meant to be compared with...
+- `Residual deviance: 159.36` This is the sum of squared deviance residuals for the model we fit. Ideally it will be _substantially lower_ than the Null deviance. "When k [informative] predictors are added to a model, we expect deviance to decrease by more than k." (Gelman and Hill, 2006) In this case we'd like to see residual deviance less than 197, which we do.
+- `AIC: 167.36` This refers to Akaike's Information Criterion. By itself it doesn't mean anything. We use it to compare models. Lower AIC is better. More on this later. 
+- `Number of Fisher Scoring iterations: 5` This refers to the iterative numerical algorithm that estimated the parameters. The default maximum iterations is 25. This model only required 5 iterations. There's is purely informational. 
+
+
 
 ## Probability versus Odds versus Log Odds
 
@@ -207,7 +219,7 @@ Let's convert a few probabilities to odds and log odds. The function `fractions(
 - small changes in probability can result in "big" changes in log odds. log odds change rapidly when p is close to 0 or 1. _In general, never a good idea to round log odds, especially when dealing with small probabilities. _
 
 ```{r}
-p <- c(0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999)
+p <- c(0.0001, 0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999, 0.9999)
 odds <- MASS::fractions(p/(1-p))
 logodds <- log(odds)
 data.frame(p, odds = as.character(odds), logodds)
@@ -308,12 +320,20 @@ p1 <- predict(m, newdata = data.frame(age = 60, sex = "Male",
 p2 <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
                                       uncons = "No"),
               type = "response")
+c(p1, p2)
+```
+
+```{r}
 # convert probabilities to odds
 odds_p1 <- p1/(1-p1)
 odds_p2 <- p2/(1-p2)
+c(odds_p1, odds_p2)
+```
+
+```{r}
 # calculate odds ratio
 or <- odds_p1/odds_p2
-cbind(p1, p2, `odds ratio` = or)
+or
 ```
 
 The odds ratio for age is about 1.03. This says the odds of dying increase about 3% for every 1 year increase in age. If we wanted to estimate that for every 10 years increase in age, we simply multiply the coefficient by 10.
@@ -335,6 +355,7 @@ pred1 <- predict(m,
                  newdata = data.frame(age = 50, sex = "Female", 
                                       uncons = "No"),
                  type = "response")
+pred1
 ```
 
 Predicted probability a female age 40 who arrives conscious dies in ICU:
@@ -344,6 +365,7 @@ pred2 <- predict(m,
                  newdata = data.frame(age = 40, sex = "Female", 
                                       uncons = "No"),
                  type = "response")
+pred2
 ```
 
 Verify odds ratio from above by literally calculating odds ratio:
@@ -372,13 +394,6 @@ coef(summary(m)) |> round(3)
 - z value: Ratio of Estimate to Std. Error. Large ratios mean coefficients with relatively small standard errors. z values larger than 2 or 3 are usually considered "big".
 - Pr(>|z|): probability of getting a value as big or bigger than |z| if coefficient is 0, given other predictors already in model. This two-sided probability is calculated using a standard Normal distribution, N(0,1).
 
-For example, z-value for sexMale is 0.3360447. To get p-value, find probability z is greater than 0.3360447 and less than -0.3360447. Since Normal distribution is symmetric, just need to find one and multiply by 2. 
-
-```{r}
-# prob z > 0.3360447
-pnorm(0.3360447, lower.tail = FALSE) * 2
-```
-
 Altogether this information is used to assess whether predictor coefficients are reliably positive or negative (i.e., different from 0)
 
 P-values only assess whether a coefficient is different from 0. It's better to assess _direction and magnitude_ of coefficients with _confidence intervals_. Use `confint()` on the model object.
@@ -387,7 +402,7 @@ P-values only assess whether a coefficient is different from 0. It's better to a
 confint(m)
 ```
 
-We're not sure if being Male increases or decreases the chance of dying. The lower bound is negative and the upper bound is positive (though not by much). Probably worth noting that there 124 male subjects in this data set versus only 76 female subjects.
+We're not sure if being Male increases or decreases the chance of dying. The lower bound is negative and the upper bound is positive (though not by much). 
 
 Using `exp()` with `confint()` provides a _confidence interval on the odds ratios_. Of interest here is whether or not the CI crosses 1. A ratio of 1 implies no difference in odds.
 
@@ -406,6 +421,9 @@ The effect of age seems small, at least per one year increase. The effect of bei
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
+```{r}
+m2 <- glm(died ~ age + admit + uncons, data = icu, family = binomial)
+```
 
 
 ## Confidence intervals on predictions
@@ -434,35 +452,27 @@ Now we add and subtract 1.96 standard errors to the prediction to get a 95% conf
 plogis(pred$fit + c(-1,1)*1.96*pred$se.fit)
 ```
 
-We can also use the `ggpredict()` function from the {ggeffects} package to calculate that confidence interval. Instead of supplying new data in data frame we use the `terms` and `condition` arguments. The `terms` are the variables of interest. The `condition` are the variables we want to condition on. Below we arbitrarily set age as the term and sex and uncons as the conditions. `age[60]` says set age to 60. `condition = c(sex = "Male", uncons = "Yes")` says to hold those two variables at "Male" and "Yes", respectively.
+An easier way is to use the `predict_response()` function from the {ggeffects} package to calculate that confidence interval. Instead of supplying new data in data frame we use the `terms` and `condition` arguments. The `terms` are the variables of interest. The `condition` are the variables we want to condition on. Below we arbitrarily set age as the term and sex and uncons as the conditions. `age[60]` says set age to 60. `condition = c(sex = "Male", uncons = "Yes")` says to hold those two variables at "Male" and "Yes", respectively.
 
 ```{r}
-ggpredict(m, terms = "age[60]", 
+predict_response(m, terms = "age[60]", 
           condition = c(sex = "Male", uncons = "Yes"))
 ```
 
-The term could also be sex with age and uncons defined in the condition.
+This is admittedly a little weird. `predict_response()` is usually employed to generate _many_ predictions for a term of interest. For example:
 
 ```{r}
-ggpredict(m, terms = "sex[Male]", 
-          condition = c(age = 60, uncons = "Yes"))
-```
-
-This is admittedly a little weird. `ggpredict()` is usually employed to generate many predictions for a term of interest. For example:
-
-```{r}
-ggpredict(m, terms = "age[30:60 by=5]", 
+predict_response(m, terms = "age[30:60 by=5]", 
           condition = c(sex = "Male", uncons = "Yes"))
 ```
 
-
-Below we show how to visualize binary logistic regression models using the {ggeffects} and {effects} packages, both of which calculate confidence intervals for predictions using the same method we just demonstrated. 
+Below we show how to visualize binary logistic regression models using the {ggeffects} package, which calculates confidence intervals for predictions using the same method we just demonstrated. 
 
 ## Model assessment
 
-It's easy to use `glm()` to fit a binary logistic model, but is the model "good"? Is one model better than another? How do we know which predictors to keep and which ones to drop? Should we allow interactions or non-linear transformations? _Model building is hard_ and requires equal parts statistical expertise and subject matter expertise. 
+It's easy to use `glm()` to fit a binary logistic model, but is the model "good"? Is one model better than another? How do we know which predictors to keep and which ones to drop?  _Model building is hard_ and requires equal parts statistical expertise and subject matter expertise. 
 
-### Is our model better than the NULL model?
+### (1) Is our model better than the NULL model?
 
 One question to consider: _is our model better than the NULL model_, where the NULL model is simply the proportion of "successes". Recall 20% of the patients admitted to the ICU died.
 
@@ -507,9 +517,9 @@ Notice that terms are added sequentially, _in order_. This is sometimes called a
 Deviance is a _statistical summary of model fit_. A "good" predictor should drop Residual Deviance by more than 1. Notice sex produces no change in deviance, but uncons drops it more than 30.
 
 See this article for an explanation of what exactly deviance residuals are:
-https://library.virginia.edu/data/articles/understanding-deviance-residuals
+<https://library.virginia.edu/data/articles/understanding-deviance-residuals>
 
-An alternative to Type I tests are _Type II tests_, which test the contribution of each variable assuming all others are included. The base R `drop1()` function produces Type II tests. This technically does not compare the model to the NULL model. However it does allow us to asses each variable's contribution to the model.
+An alternative to Type I tests are _Type II tests_, which test the contribution of each variable _assuming all others are included_. The base R `drop1()` function produces Type II tests. This technically does not compare the model to the NULL model. However it does allow us to asses each variable's contribution to the model.
 
 ```{r}
 drop1(m, test = "Chisq")
@@ -517,7 +527,7 @@ drop1(m, test = "Chisq")
 
 The substance of the results are largely the same, however each test assumes the other variables are in the model. For example, adding age to a model with sex and uncons already present appears to improve the model.
 
-### Is our model worse than the SATURATED model?
+### (2) Is our model worse than the SATURATED model?
 
 A second question to consider: _how bad is our model compared to a saturated model that fits the data perfectly_? The `LRstats()` function from the {vcdExtra} package helps us to assess this question. It conducts a hypothesis test with the Null being "the model fit is no different from the saturated model". A low p-value provides evidence against this hypothesis.
 
@@ -527,7 +537,7 @@ LRstats(m)
 
 The result of this test fails to provide evidence against the Null. That's good.
 
-See also the "Assessing predictive accuracy" section at the end for more information. 
+See also the "Assessing predictive accuracy" section in the appendix of this notebook for more information. 
 
 ## CODE ALONG 3
 
@@ -536,18 +546,15 @@ Assess model `m2` using the methods we just described.
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
 
+### Fitting interactions
 
-## Fitting more complex models
+So far our models only contain _main effects_. The effects are _additive_. It doesn't matter what age you are, the effect of uncons is the same. 
 
-So far our models only contain _main effects_. The effects are _additive_. It doesn't matter what age you are, the effect of uncons is the same. The effect of age is also constant. The effect of age going from 20 to 21 is the same as the age going from 75 to 76.
+We can relax that assumption by allowing variables to _interact_. These make our models more complex and more difficult to interpret. But they also may produce better models that more accurately explain the probability of our response.
 
-We can relax that assumption by allowing variables to _interact_ and to allow variables to have _non-linear_ effects. These make our models more complex and more difficult to interpret. But they also may produce better models that more accurately explain the probability of our response.
+Note: more complex models require more data. See the _Minimum sample sizes_ section in the appendix of this Notebook.
 
-Note: more complex models require more data. See the _Minimum sample sizes_ section below.
-
-### Interactions
-
-When variables interact, that means we cannot untangle their effects. The effect of one depends on another. For example, perhaps the effect of age depends on uncons status. 
+When variables interact, that means we cannot untangle their effects. The effect of one _depends_ on another. For example, perhaps the effect of age depends on uncons status. 
 
 Below we allow age and uncons to interact by adding `age:uncons` to the model. That does not mean they really interact. We're simply _allowing them to interact in our model_. The evidence for the hypothesized interaction seems rather weak according to the small z value and relatively high p-value.
 
@@ -557,119 +564,137 @@ m_int <- glm(died ~ age + sex + uncons + age:uncons, data = icu,
 summary(m_int)
 ```
 
-### Non-linear effects
-
-A non-linear effect is not constant. The slope or trajectory changes over the range of values. For example, humans don't grow in height at a constant rate. We don't grow 3 inches per year until we die. We tend to grow at varying rates until we stop in our late teens or 20s.
-
-Below we allow age to have a non-linear effect by using a _natural spline_ with 2 degrees of freedom. This basically allows the effect of age to change trajectory twice if needed. It's somewhat similar to polynomial regression, but better behaved in the extremes of the data. The splines package comes with R. The `ns()` function can be used directly in the model formula. The second argument specifies how many times you want to let the effect "bend", or change direction. 
+Let's fit a model where age and systolic interact.
 
 ```{r}
-library(splines)
-m_nle <- glm(died ~ ns(age, 2) + sex + uncons, data = icu,
-             family = binomial)
-summary(m_nle)
+m3 <- glm(died ~ age + systolic + age:systolic, data = icu, family = binomial)
+summary(m3)
 ```
 
-It's hard to tell if the spline is necessary based on the summary output. One proper way to assess this is using the `anova()` function, where we can compare model with a linear effect age to the model with a nonlinear effect of age. This tests whether or not we need the non-linear term. The null hypothesis of this test is that both models are equally good, which implies we don't need the non-linear effect for age.
-
-```{r}
-anova(m, m_nle, test = "Chisq")
-```
-
-It appears we don't benefit from the non-linear effect.
-
+The small p-value might suggest an interaction is present. But notice how small the coefficient is. Is this interaction important? How can we assess this?
 
 ## Visualizing models
 
-Adding interactions and/or non-linear terms make model interpretation extremely difficult. One way to make sense of your model is to use _effect plots_. 
+_Effect plots_ allow us to visualize our model. 
 
 The basic idea is to pick a variable of interest, say age, and make predictions for it over a range of values while holding other predictors constant.
 
-Below we show how to do this using the {ggeffects} package. 
+Below we show how to do this using the `predict_response()` function from the {ggeffects} package. 
 
-First we'll visualize `m_nle` using `ggpredict()`. The first argument is our model object, the second argument specifies which variable, or model term, we wish to visualize. This produces predictions at various ages while holding sex and uncons at "Female" and "No", respectively. These are the reference levels for each variable.
+Lets visualize model `m3`. The first argument is our model object, the second argument specifies which variables, or model terms, we wish to visualize. This produces predictions at various ages for specific values of systolic.
 
 ```{r}
-ggpredict(m_nle, terms = "age")
+predict_response(m3, terms = c("age", "systolic")) 
 ```
 
-We can pipe this result into `plot()` to get a basic effect plot. The light gray ribbon is a 95% confidence band. Notice the ribbon gets larger (more uncertain) when we have fewer observations, which we see in the extremes of the data. It appears the effect of age doesn't change until after about age 55, and then it begins to increase. 
+We can pipe this result into `plot()` to get a basic effect plot. The colored ribbons are 95% confidence bands. It appears as systolic gets lower the effect of age on death increases.
 
 ```{r}
-ggpredict(m_nle, terms = "age") |> 
+predict_response(m3, terms = c("age", "systolic"))  |> 
   plot()
 ```
 
-If we want to condition on sex = "Male" and uncons = "Yes", we can set them using the condition argument. They need to be specified using a vector. Notice how large the confidence ribbon gets since we have relatively few people were unconscious when admitted to the icu.
+
+The values of systolic are automatically set to the mean and +/- one standard deviation. We can manually set those values if we like as follows. Note this syntax is unique to the {ggeffects} package.
 
 ```{r}
-ggpredict(m_nle, terms = "age", 
-          condition = c(sex = "Male", uncons = "Yes")) |>
+predict_response(m3, terms = c("age", "systolic[95, 130, 165]")) |>
   plot()
 ```
 
-Notice the plots above are on the probability scale, which is usually desirable. But the fitted lines will usually curve reflecting the non-linear transformation from log odds to probabilities. 
-
-We can make the plots on the log-odds scale but label them with probabilities by setting `log.y = TRUE`. This will generate plotted lines that reflect the coefficients in the model. For example, in m_nle, age is modeled as a non-linear effect. By setting `log.y = TRUE` we can see the fitted non-linear effect. Notice the curve is slight and could easily fit within the confidence ribbon as a straight line. (Recall the non-linear coefficient was not significant.) Also notice the uneven spacing on the y-axis.
-
-```{r}
-ggpredict(m_nle, terms = "age") |> 
-  plot(log.y = TRUE)
-```
-
-
-Next, we visualize m_int which models an interaction between age and uncons. This allows the effect of uncons to depend on age, and vice versa. (Recall the interaction was small and the p-value was about 0.11.) Using `ggpredict()`, we specify the variables of interest as a vector. The first variable will be plotted on the x-axis. The syntax `age[all]` tells `ggpredict()` to use all age values when making predictions.
-
-```{r}
-ggpredict(m_int, terms = c("age[all]", "uncons")) |>
-  plot()
-```
-
-There is a great deal of uncertainty about the effect of age when a patient is unconscious. That's because of the 200 patients, only 15 were admitted unconscious. And no one under the age of 40 was unconscious when admitted to the ICU. By setting `log.y = TRUE` we can plot on log odds scale but label the axis with probabilities. In addition we can separate the plots using `facet=TRUE`.
-
-```{r}
-ggpredict(m_int, terms = c("age[all]", "uncons")) |>
-  plot(log.y = TRUE, facet = TRUE)
-```
-
-If we reverse the order of variables in the `terms` argument we get uncons on the x-axis and age set to 3 distinct values (mean of age and +/- 1 standard deviation.
-
-```{r}
-ggpredict(m_int, terms = c("uncons", "age")) |>
-  plot()
-```
-
-```{r}
-mean(icu$age)
-mean(icu$age) + c(-1,1)*sd(icu$age)
-```
-
-Standard deviation is really only appropriate if your data is symmetric and age is certainly not symmetric.
-
-```{r}
-hist(icu$age)
-```
-
-Fortunately we can set our own values for age when we create the effect plot. Below we get the 25th, 50th, and 75th percentiles of age, save as a vector named "v", and then use that object in the call to `ggpredict()`.
-
-```{r}
-v <- quantile(icu$age, probs = c(0.25, 0.50, 0.75))
-ggpredict(m_int, terms = c("uncons", "age[v]")) |>
-  plot()
-```
-
-Of course that didn't really change the plot all that much. 
 
 
 ## CODE ALONG 4
 
-- Fit a new model with the following formula and save as `m3`: 
+- Fit a new model with the following formula and save as `m4`: 
   `died ~ age + admit + uncons + age:uncons`   
 - Does the interaction seem necessary?
 - Visualize the interaction.
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
+
+## Influence and Diagnostic Plots
+
+One or two influential observations can completely change a model. For example, a notable interaction may be due to an observation's unusual values. 
+
+An effective plot for quickly assessing influence is the `influencePlot()` function from {car} package. It plots three difference diagnostics:
+
+1. _residuals_ on y axis: how different is an observed response from its predicted response
+2. _Hat values_ on x axis: measures "leverage", potential impact of a case on the model
+3. _Cook's distance_ as size of points: influence of observation on regression coefficients
+
+Let's use this plot with our `m4` model that we fit in the previous code along.
+
+```{r}
+m3 <- glm(died ~ age + admit + uncons + age:uncons,
+          data = icu, family = binomial)
+summary(m3)
+```
+
+Assigning the result creates a data frame of the most influential values.
+
+```{r}
+infl <- influencePlot(m3)
+```
+
+Below are the exact values of the labeled points. A Cook's D bigger than 1 is the usual red flag. A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). Residuals larger than 2.5 may be of interest.
+
+```{r}
+infl
+```
+
+We can extract the rownames and use them to subset the icu data frame to see the observed values. 
+
+```{r}
+pred <- predict(m3, type = "response")[rownames(infl)]
+obs <- icu[rownames(infl), c("died", "age", "cancer", 
+                             "admit", "uncons", "systolic")]
+cbind(obs, pred)
+```
+
+- Subject 18: model predicts death at 96%, but subject lived
+- Subject 151: one of the older subjects at age 89, arrived uncons, and lived
+- Subject 170: model predicts death at 4%, but subject died
+- Subject 172: subject had Elective admit but arrived unconscious? (typo?)
+
+One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Let's drop subject 151 since they have the high Cook's D value. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
+
+```{r}
+m3a <- glm(died ~ age + admit + uncons + age:uncons,
+          data = icu, family = binomial, 
+          subset = -151)
+compareCoefs(m3, m3a)
+```
+
+By dropping subject 151, the coefficient of the uncons main effect dropped from 13.13 to 2.46, and the age:uncons interaction reversed sign and saw an increase in standard error. This doesn't necessarily mean we should remove this subject from the analysis. It just means they're influencing the model and we should exercise caution and modesty in drawing conclusions.
+
+## CODE ALONG 5
+
+- Fit a new model with formula `died ~ systolic + admit + uncons`. Call the model `m6`.
+- Check the model influential observations using the `influencePlot()` function. Save the result as `infl_m6`.
+
+
+
+## We're done!
+
+See the appendix for more material cut for time.
+
+For help with statistical analysis, contact the UVA Library StatLab: `statlab@virginia.edu`
+
+## References
+
+-  Fox J, Weisberg S (2019). _An R Companion to Applied Regression_, Third edition. Sage, Thousand Oaks CA. <https://socialsciences.mcmaster.ca/jfox/Books/Companion/>.
+- Friendly M, Meyer D (2016). Discrete Data Analysis with R: Visualization and Modeling Techniques for Categorical and Count Data. CRC Press.
+- Friendly M (2022). _vcdExtra: 'vcd' Extensions and Additions_. R package version 0.8-0, <https://CRAN.R-project.org/package=vcdExtra>.
+- Gelman A, Hill J (2006). _Data Analysis Using Regression and Multilevel/Hierarchical Models_. Cambridge University Press.
+- Lemeshow S, Teres D, Avrunin JS, Pastides H. (1988). Predicting the Outcome of Intensive Care Unit Patients. Journal of the American Statistical Association, 83, 348-356.
+- Lüdecke D (2018). "ggeffects: Tidy Data Frames of Marginal Effects from Regression Models." _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772  <https://doi.org/10.21105/joss.00772>.
+- R Core Team (2022). R: A language and environment for statistical  computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
+- Harrell F (2015). Regression Modeling Strategies, 2nd ed. Springer. http://hbiostat.org/rmsc/
+
+
+## Appendix
 
 ## Comparing models
 
@@ -709,89 +734,64 @@ The interaction may be useful but is probably small. Whether or not to keep it i
 LRstats(m4, m5)
 ```
 
-## Influence and Diagnostic Plots
 
-One or two influential observations can completely change a model. For example, a notable interaction may be due to an observation's unusual values. 
+### Fitting non-linear effects
 
-An effective plot for quickly assessing influence is the `influencePlot()` function from {car} package. It plots three difference diagnostics:
+A non-linear effect is not constant. The slope or trajectory changes over the range of values. For example, humans don't grow in height at a constant rate. We don't grow 3 inches per year until we die. We tend to grow at varying rates until we stop in our late teens or 20s.
 
-1. _residuals_ on y axis: how different is an observed response from its predicted response
-2. _Hat values_ on x axis: measures "leverage", potential impact of a case on the model
-3. _Cook's distance_ as size of points: influence of observation on regression coefficients
-
-Let's use this plot with our `m3` model.
+Below we allow age to have a non-linear effect by using a _natural spline_ with 2 degrees of freedom. This basically allows the effect of age to change trajectory twice if needed. It's somewhat similar to polynomial regression, but better behaved in the extremes of the data. The splines package comes with R. The `ns()` function can be used directly in the model formula. The second argument specifies how many times you want to let the effect "bend", or change direction. 
 
 ```{r}
-m3 <- glm(died ~ age + admit + uncons + age:uncons,
-          data = icu, family = binomial)
-summary(m3)
+library(splines)
+m_nle <- glm(died ~ ns(age, 2) + sex + uncons, data = icu,
+             family = binomial)
+summary(m_nle)
 ```
 
-Assigning the result creates a data frame of the most influential values.
+It's hard to tell if the spline is necessary based on the summary output. One proper way to assess this is using the `anova()` function, where we can compare model with a linear effect age to the model with a nonlinear effect of age. This tests whether or not we need the non-linear term. The null hypothesis of this test is that both models are equally good, which implies we don't need the non-linear effect for age.
 
 ```{r}
-infl <- influencePlot(m3)
+anova(m, m_nle, test = "Chisq")
 ```
 
-Here are the exact values of the labeled points. A Cook's D bigger than 1 is the usual red flag. A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). Residuals larger than 2.5 may be of interest.
+It appears we don't benefit from the non-linear effect.
+
+
+## Making comparisons
+
+In addition to visualizing our model results, we might like to make some follow-up comparisons. For example, the predicted probability of death when admitted to the ICU conscious is about 0.13. The probability of death when admitted unconscious is about 0.85. That's a difference of about 0.72. How certain are we about that difference? For this we would like to calculate a confidence interval. 
+
+We can use the {emmeans} package for this task. The argument `regrid = "response"` means use the original response scale (probability) for the "reference grid". This gives us a 95% confidence interval on the difference in probabilities: [0.52, 0.91]
 
 ```{r}
-infl
+library(emmeans)
+emmeans(m, specs = "uncons", regrid = "response") |> 
+  pairs(reverse = TRUE) |> 
+  confint()
 ```
 
-We can extract the rownames and use them to subset the icu data frame to see the observed values. 
+Instead of working with absolute difference in probabilities, we can work with relative differences. To do this, we set `type = "response"`. Notice we get an odds ratio, which is the same odds ratio we got when we exponentiated the coefficient for uncons.
 
 ```{r}
-pred <- predict(m3, type = "response")[rownames(infl)]
-obs <- icu[rownames(infl), c("died", "age", "cancer", 
-                             "admit", "uncons", "systolic")]
-cbind(obs, pred)
+emmeans(m, specs = "uncons", type = "response", 
+        at = list(sex = "Female", age = 63)) |> 
+  pairs(reverse = TRUE) |> 
+  confint()
 ```
 
-- Subject 18: model predicts death at 96%, but subject lived
-- Subject 151: one of the older subjects at age 89, arrived uncons, and lived
-- Subject 170: model predicts death at 4%, but subject died
-- Subject 172: subject had Elective admit but arrived unconscious? (typo?)
-
-One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Let's drop subject 151 since they have the high Cook's D value. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
+Finally let's work with model `m3`. Let's say we want to compare the probability of death at age 50 versus age 60 conditional on systolic levels of 95, 130 and 165.
 
 ```{r}
-m3a <- glm(died ~ age + admit + uncons + age:uncons,
-          data = icu, family = binomial, 
-          subset = -151)
-compareCoefs(m3, m3a)
+emmeans(m3, specs = ~ age | systolic, 
+        at = list(age = c(50, 60), 
+                  systolic = c(95, 130, 165)), 
+        regrid = "response") |> 
+  pairs(reverse = TRUE)
 ```
 
-By dropping subject 155, the coefficient of the uncons main effect dropped from 13.13 to 2.46, and the age:uncons interaction reversed sign and saw an increase in standard error. This doesn't necessarily mean we should remove this subject from the analysis. It just means they're influencing the model and we should exercise caution and modesty in drawing conclusions.
-
-## CODE ALONG 5
-
-- Fit a new model with formula `died ~ systolic + admit + uncons`. Call the model `m6`.
-- Check the model influential observations using the `influencePlot()` function. Save the result as `infl_m6`.
-_ Compare the model to `m2`.
-
-Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
+It appears there's a notable difference when systolic = 95, and that difference becomes less pronounced as systolic increases.
 
 
-## We're done!
-
-See the appendix for more material cut for time.
-
-For help with statistical analysis, contact the UVA Library StatLab: `statlab@virginia.edu`
-
-## References
-
--  Fox J, Weisberg S (2019). _An R Companion to Applied Regression_, Third edition. Sage, Thousand Oaks CA. <https://socialsciences.mcmaster.ca/jfox/Books/Companion/>.
-- Friendly M, Meyer D (2016). Discrete Data Analysis with R: Visualization and Modeling Techniques for Categorical and Count Data. CRC Press.
-- Friendly M (2022). _vcdExtra: 'vcd' Extensions and Additions_. R package version 0.8-0, <https://CRAN.R-project.org/package=vcdExtra>.
-- Gelman A, Hill J (2006). _Data Analysis Using Regression and Multilevel/Hierarchical Models_. Cambridge University Press.
-- Lemeshow S, Teres D, Avrunin JS, Pastides H. (1988). Predicting the Outcome of Intensive Care Unit Patients. Journal of the American Statistical Association, 83, 348-356.
-- Lüdecke D (2018). "ggeffects: Tidy Data Frames of Marginal Effects from Regression Models." _Journal of Open Source Software_, *3*(26), 772. doi:10.21105/joss.00772  <https://doi.org/10.21105/joss.00772>.
-- R Core Team (2022). R: A language and environment for statistical  computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
-- Harrell F (2015). Regression Modeling Strategies, 2nd ed. Springer. http://hbiostat.org/rmsc/
-
-
-## Appendix
 
 
 ### Three ways to fit a binary logistic regression model
