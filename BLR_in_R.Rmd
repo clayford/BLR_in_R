@@ -420,9 +420,7 @@ The effect of age seems small, at least per one year increase. The effect of bei
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
-```{r}
-m2 <- glm(died ~ age + admit + uncons, data = icu, family = binomial)
-```
+
 
 ## Model assessment
 
@@ -577,7 +575,6 @@ predict_response(m3, terms = c("age", "systolic[95, 130, 165]")) |>
 
 - Fit a new model with the following formula and save as `m4`: 
   `died ~ age + admit + uncons + age:uncons`   
-- Does the interaction seem necessary?
 - Visualize the interaction.
 
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
@@ -593,18 +590,17 @@ An effective plot for quickly assessing influence is the `influencePlot()` funct
 2. _Hat values_ on x axis: measures "leverage", potential impact of a case on the model
 3. _Cook's distance_ as size of points: influence of observation on regression coefficients
 
-Let's use this plot with our `m4` model that we fit in the previous code along.
+Let's fit a model with all predictors and assess the model for influential observations. Let's call the model `m_all`.
 
 ```{r}
-m4 <- glm(died ~ age + admit + uncons + age:uncons,
-          data = icu, family = binomial)
-summary(m4)
+m_all <- glm(died ~ ., data = icu, family = binomial)
+summary(m_all)
 ```
 
 Assigning the result creates a data frame of the most influential values.
 
 ```{r}
-infl <- influencePlot(m4)
+infl <- influencePlot(m_all)
 ```
 
 Below are the exact values of the labeled points. A Cook's D bigger than 1 is the usual red flag. A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). Residuals larger than 2.5 may be of interest.
@@ -616,33 +612,25 @@ infl
 We can extract the rownames and use them to subset the icu data frame to see the observed values. 
 
 ```{r}
-pred <- predict(m3, type = "response")[rownames(infl)]
-obs <- icu[rownames(infl), c("died", "age", "cancer", 
-                             "admit", "uncons", "systolic")]
+pred <- predict(m_all, type = "response")[rownames(infl)]
+obs <- icu[rownames(infl),]
 cbind(obs, pred)
 ```
 
-- Subject 18: model predicts death at 96%, but subject lived
-- Subject 151: one of the older subjects at age 89, arrived uncons, and lived
-- Subject 170: model predicts death at 4%, but subject died
+- Subject 18: model predicts death at 97%, but subject lived
 - Subject 172: subject had Elective admit but arrived unconscious? (typo?)
+- Subject 181: model predicts death at 4%, but subject died
+- Subject 200: subject had systolic value of 256 (the max)
 
-One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Let's drop subject 151 since they have the high Cook's D value. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
+One action to take based on these results is a _sensitivity analysis_ where we fit the model without one or more of the data points to see how the model changes. Let's drop subject 18 since they have the highest Cook's D value. Then we compare coefficients from both models using the `compareCoefs()` function from the {car} package.
 
 ```{r}
-m3a <- glm(died ~ age + admit + uncons + age:uncons,
-          data = icu, family = binomial, 
-          subset = -151)
-compareCoefs(m3, m3a)
+m_all2 <- glm(died ~ ., data = icu, family = binomial, 
+          subset = -18)
+compareCoefs(m_all, m_all2)
 ```
 
-By dropping subject 151, the coefficient of the uncons main effect dropped from 13.13 to 2.46, and the age:uncons interaction reversed sign and saw an increase in standard error. This doesn't necessarily mean we should remove this subject from the analysis. It just means they're influencing the model and we should exercise caution and modesty in drawing conclusions.
-
-## CODE ALONG 5
-
-- Fit a new model with formula `died ~ systolic + admit + uncons`. Call the model `m6`.
-- Check the model influential observations using the `influencePlot()` function. Save the result as `infl_m6`.
-
+By dropping subject 18, the coefficient of the uncons main effect increases from 3.9 to 5.4. This doesn't necessarily mean we should remove this subject from the analysis. It just means they're influencing the model and we should exercise caution and modesty in drawing conclusions.
 
 
 ## We're done!
