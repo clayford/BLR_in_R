@@ -34,7 +34,6 @@ We'll use the following packages in this workshop.
 library(vcdExtra)
 library(car)
 library(ggeffects)
-library(emmeans)
 ```
 
 
@@ -44,7 +43,7 @@ Pick a UVA student at random. What is the probability they have at least one tat
 
 The _proportion_, 15/100 = 0.15, could be interpreted as an estimated _probability_ that a UVA student has a tattoo. Recall that proportions and probabilities range from 0 to 1. We might conclude about 15% of UVA students have tattoos, or there's a probability of about 0.15 that a randomly selected UVA student has a tattoo.
 
-What if we sampled 100 males and 100 females and compared the proportion with tattoos? Perhaps 0.18 of males have tattoos and 0.12 of females have tattoos. This suggests the probability of having a tattoo may be related to gender.
+What if we sampled 100 males and 100 females and compared the proportion with tattoos? Perhaps 0.18 of males have tattoos and 0.12 of females have tattoos. This suggests the probability of having a tattoo may be _related to gender_.
 
 What if we also collected other information such as cumulative GPA or Greek life (yes or no)? Again this suggests the probability of having a tattoo may be related to multiple _variables_ or _predictors_.
 
@@ -206,7 +205,7 @@ Number of Fisher Scoring iterations: 5
 
 
 
-## Probability versus Odds versus Log Odds
+## Probability, Odds and Log Odds
 
 Let p be probability.    
 Odds = p/(1-p).     
@@ -219,7 +218,7 @@ Let's convert a few probabilities to odds and log odds. The function `fractions(
 - small changes in probability can result in "big" changes in log odds. log odds change rapidly when p is close to 0 or 1. _In general, never a good idea to round log odds, especially when dealing with small probabilities. _
 
 ```{r}
-p <- c(0.0001, 0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999, 0.9999)
+p <- c(0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.9, 0.99, 0.999)
 odds <- MASS::fractions(p/(1-p))
 logodds <- log(odds)
 data.frame(p, odds = as.character(odds), logodds)
@@ -290,7 +289,7 @@ Say another event has a probability of 0.6 of happening. The corresponding odds 
 # event 2
 p2 <- 0.6
 odds2 <- p2/(1-p2)
-odds2  # 3/2
+odds2 
 ```
 
 The odds ratio of the two events is 4/1.5, which is about 2.7. 
@@ -309,7 +308,7 @@ Let's look at the odds ratios of our model:
 exp(coef(m))
 ```
 
-Our model claims the odds of dying when unconscious are about 36 times higher than the odds of dying when you are not unconscious! We can calculate this "by hand" by predicting probabilities for, say, two Males aged 60, one who was unconscious and the other who was not:
+Our model claims the odds of dying when unconscious at admission are about 36 times higher than the odds of dying when you are not unconscious at admission! We can calculate this "by hand" by predicting probabilities for, say, two Males aged 60, one who was unconscious and the other who was not:
 
 ```{r}
 # unconscious male, age 60
@@ -425,49 +424,6 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 m2 <- glm(died ~ age + admit + uncons, data = icu, family = binomial)
 ```
 
-
-## Confidence intervals on predictions
-
-A prediction is just a point estimate. There is some uncertainty in the estimate. A confidence interval helps quantify the uncertainty. Unfortunately the `predict()` function for binary logistic regression models does not provide a confidence interval for predictions. However we can calculate it ourselves.
-
-Earlier we made a prediction for a male, age 60 who was admitted unconscious to the ICU as follows:
-
-```{r}
-predict(m, newdata = data.frame(age = 60, sex = "Male", uncons = "Yes"),
-              type = "response")
-```
-
-While there is no option for a confidence interval, we can request the standard error of the prediction by specifying `se.fit = TRUE`. Notice below we request the predicted log odds instead of the response. This is so we get a standard error on the log odds scale. This will prevent us from having  confidence interval that goes below 0 or above 1. We save to object "pred" for convenience.
-
-```{r}
-pred <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
-                                        uncons = "Yes"),
-                se.fit = TRUE)
-pred
-```
-
-Now we add and subtract 1.96 standard errors to the prediction to get a 95% confidence interval on the log odds scale, and then use the inverse logit to transform to probabilities.
-
-```{r}
-plogis(pred$fit + c(-1,1)*1.96*pred$se.fit)
-```
-
-An easier way is to use the `predict_response()` function from the {ggeffects} package to calculate that confidence interval. Instead of supplying new data in data frame we use the `terms` and `condition` arguments. The `terms` are the variables of interest. The `condition` are the variables we want to condition on. Below we arbitrarily set age as the term and sex and uncons as the conditions. `age[60]` says set age to 60. `condition = c(sex = "Male", uncons = "Yes")` says to hold those two variables at "Male" and "Yes", respectively.
-
-```{r}
-predict_response(m, terms = "age[60]", 
-          condition = c(sex = "Male", uncons = "Yes"))
-```
-
-This is admittedly a little weird. `predict_response()` is usually employed to generate _many_ predictions for a term of interest. For example:
-
-```{r}
-predict_response(m, terms = "age[30:60 by=5]", 
-          condition = c(sex = "Male", uncons = "Yes"))
-```
-
-Below we show how to visualize binary logistic regression models using the {ggeffects} package, which calculates confidence intervals for predictions using the same method we just demonstrated. 
-
 ## Model assessment
 
 It's easy to use `glm()` to fit a binary logistic model, but is the model "good"? Is one model better than another? How do we know which predictors to keep and which ones to drop?  _Model building is hard_ and requires equal parts statistical expertise and subject matter expertise. 
@@ -556,7 +512,7 @@ Note: more complex models require more data. See the _Minimum sample sizes_ sect
 
 When variables interact, that means we cannot untangle their effects. The effect of one _depends_ on another. For example, perhaps the effect of age depends on uncons status. 
 
-Below we allow age and uncons to interact by adding `age:uncons` to the model. That does not mean they really interact. We're simply _allowing them to interact in our model_. The evidence for the hypothesized interaction seems rather weak according to the small z value and relatively high p-value.
+Below we allow age and uncons to interact by adding `age:uncons` to the model. That does not mean they really interact. We're simply _allowing them to interact in our model_. The evidence for the hypothesized interaction seems weak judging from the p-value (0.11).
 
 ```{r}
 m_int <- glm(died ~ age + sex + uncons + age:uncons, data = icu,
@@ -564,14 +520,27 @@ m_int <- glm(died ~ age + sex + uncons + age:uncons, data = icu,
 summary(m_int)
 ```
 
-Let's fit a model where age and systolic interact.
+The confidence interval on the interaction barely overlaps 0. There may be an interaction. Of course we only have 15 subjects who arrived unconscious.
 
 ```{r}
-m3 <- glm(died ~ age + systolic + age:systolic, data = icu, family = binomial)
+confint(m_int)
+```
+
+Let's fit a model where age and systolic interact. The p-value for the interaction appears "significant", but the interaction itself appears to be tiny!
+
+```{r}
+m3 <- glm(died ~ age + systolic + age:systolic, data = icu, 
+          family = binomial)
 summary(m3)
 ```
 
-The small p-value might suggest an interaction is present. But notice how small the coefficient is. Is this interaction important? How can we assess this?
+The confidence interval on the interaction does not overlap 0, but at it's largest it's only about -0.002.
+
+```{r}
+confint(m3) |> round(5)
+```
+
+Is this interaction important? How can we assess this?
 
 ## Visualizing models
 
@@ -627,15 +596,15 @@ An effective plot for quickly assessing influence is the `influencePlot()` funct
 Let's use this plot with our `m4` model that we fit in the previous code along.
 
 ```{r}
-m3 <- glm(died ~ age + admit + uncons + age:uncons,
+m4 <- glm(died ~ age + admit + uncons + age:uncons,
           data = icu, family = binomial)
-summary(m3)
+summary(m4)
 ```
 
 Assigning the result creates a data frame of the most influential values.
 
 ```{r}
-infl <- influencePlot(m3)
+infl <- influencePlot(m4)
 ```
 
 Below are the exact values of the labeled points. A Cook's D bigger than 1 is the usual red flag. A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). Residuals larger than 2.5 may be of interest.
@@ -695,6 +664,50 @@ For help with statistical analysis, contact the UVA Library StatLab: `statlab@vi
 
 
 ## Appendix
+
+
+## Confidence intervals on predictions
+
+A prediction is just a point estimate. There is some uncertainty in the estimate. A confidence interval helps quantify the uncertainty. Unfortunately the `predict()` function for binary logistic regression models does not provide a confidence interval for predictions. However we can calculate it ourselves.
+
+Earlier we made a prediction for a male, age 60 who was admitted unconscious to the ICU as follows:
+
+```{r}
+predict(m, newdata = data.frame(age = 60, sex = "Male", uncons = "Yes"),
+              type = "response")
+```
+
+While there is no option for a confidence interval, we can request the standard error of the prediction by specifying `se.fit = TRUE`. Notice below we request the predicted log odds instead of the response. This is so we get a standard error on the log odds scale. This will prevent us from having  confidence interval that goes below 0 or above 1. We save to object "pred" for convenience.
+
+```{r}
+pred <- predict(m, newdata = data.frame(age = 60, sex = "Male", 
+                                        uncons = "Yes"),
+                se.fit = TRUE)
+pred
+```
+
+Now we add and subtract 1.96 standard errors to the prediction to get a 95% confidence interval on the log odds scale, and then use the inverse logit to transform to probabilities.
+
+```{r}
+plogis(pred$fit + c(-1,1)*1.96*pred$se.fit)
+```
+
+An easier way is to use the `predict_response()` function from the {ggeffects} package to calculate that confidence interval. Instead of supplying new data in data frame we use the `terms` and `condition` arguments. The `terms` are the variables of interest. The `condition` are the variables we want to condition on. Below we arbitrarily set age as the term and sex and uncons as the conditions. `age[60]` says set age to 60. `condition = c(sex = "Male", uncons = "Yes")` says to hold those two variables at "Male" and "Yes", respectively.
+
+```{r}
+predict_response(m, terms = "age[60]", 
+          condition = c(sex = "Male", uncons = "Yes"))
+```
+
+This is admittedly a little weird. `predict_response()` is usually employed to generate _many_ predictions for a term of interest. For example:
+
+```{r}
+predict_response(m, terms = "age[30:60 by=5]", 
+          condition = c(sex = "Male", uncons = "Yes"))
+```
+
+Below we show how to visualize binary logistic regression models using the {ggeffects} package, which calculates confidence intervals for predictions using the same method we just demonstrated. 
+
 
 ## Comparing models
 
