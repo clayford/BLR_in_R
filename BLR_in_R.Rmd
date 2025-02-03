@@ -347,21 +347,21 @@ Odds ratios only express _relative_ differences. A large odds ratio does not mea
 
 Let's revisit this statement: "Every 10 year increase in age increases the odds of dying by about 33%, all else held constant."
 
-Predicted probability a female age 50 who arrives conscious dies in ICU:
+Predicted probability a female age 40 who arrives conscious dies in ICU:
 
 ```{r}
 pred1 <- predict(m, 
-                 newdata = data.frame(age = 50, sex = "Female", 
+                 newdata = data.frame(age = 40, sex = "Female", 
                                       uncons = "No"),
                  type = "response")
 pred1
 ```
 
-Predicted probability a female age 40 who arrives conscious dies in ICU:
+Predicted probability a female age 50 who arrives conscious dies in ICU:
 
 ```{r}
 pred2 <- predict(m, 
-                 newdata = data.frame(age = 40, sex = "Female", 
+                 newdata = data.frame(age = 50, sex = "Female", 
                                       uncons = "No"),
                  type = "response")
 pred2
@@ -370,14 +370,14 @@ pred2
 Verify odds ratio from above by literally calculating odds ratio:
 
 ```{r}
-(pred1/(1 - pred1))/
-  (pred2/(1 - pred2))
+(pred2/(1 - pred2))/
+  (pred1/(1 - pred1))
 ```
 
 But look at the predicted probabilities and absolute difference. They're all quite low.
 
 ```{r}
-cbind("age 50" = pred1, "age 40" = pred2, "Diff" = pred1 - pred2)
+cbind("age 50" = pred1, "age 40" = pred2, "Diff" = pred2 - pred1)
 ```
 
 
@@ -401,7 +401,7 @@ P-values only assess whether a coefficient is different from 0. It's better to a
 confint(m)
 ```
 
-We're not sure if being Male increases or decreases the chance of dying. The lower bound is negative and the upper bound is positive (though not by much). 
+We're not sure if being Male increases or decreases the chance of dying.  
 
 Using `exp()` with `confint()` provides a _confidence interval on the odds ratios_. Of interest here is whether or not the CI crosses 1. A ratio of 1 implies no difference in odds.
 
@@ -456,10 +456,10 @@ We can formally assess if a proposed model is better than the NULL model using t
 formula(m)
 ```
 
-How much better is it than the NULL model? Call `anova()` with `test = "Chisq"`:
+How much better is it than the NULL model? Call `anova()` on your model object:
 
 ```{r}
-anova(m, test = "Chisq")
+anova(m)
 ```
 
 Notice that terms are added sequentially, _in order_. This is sometimes called a _Type I test_.
@@ -554,10 +554,10 @@ Lets visualize model `m3`. The first argument is our model object, the second ar
 predict_response(m3, terms = c("age", "systolic")) 
 ```
 
-We can pipe this result into `plot()` to get a basic effect plot. The colored ribbons are 95% confidence bands. It appears as systolic gets lower the effect of age on death increases.
+We can pipe this result into `plot()` to get a basic effect plot. Notice we can define the range of the data by appending `[30:80]` to age. The colored ribbons are 95% confidence bands. It appears as systolic gets lower the effect of age on death increases.
 
 ```{r}
-predict_response(m3, terms = c("age", "systolic"))  |> 
+predict_response(m3, terms = c("age[30:80]", "systolic"))  |> 
   plot()
 ```
 
@@ -565,7 +565,7 @@ predict_response(m3, terms = c("age", "systolic"))  |>
 The values of systolic are automatically set to the mean and +/- one standard deviation. We can manually set those values if we like as follows. Note this syntax is unique to the {ggeffects} package.
 
 ```{r}
-predict_response(m3, terms = c("age", "systolic[95, 130, 165]")) |>
+predict_response(m3, terms = c("age[30:80]", "systolic[95, 130, 165]")) |>
   plot()
 ```
 
