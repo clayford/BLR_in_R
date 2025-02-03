@@ -597,7 +597,7 @@ m_all <- glm(died ~ ., data = icu, family = binomial)
 summary(m_all)
 ```
 
-Assigning the result creates a data frame of the most influential values.
+Now call `influencePlot()` on the model object. A plot is produced with "noteworthy" points labeled. Assigning the result creates a data frame of the most noteworthy values. 
 
 ```{r}
 infl <- influencePlot(m_all)
