@@ -15,10 +15,10 @@ stripchart(systolic ~ died, data = icu, method = "jitter")
 
 ## CODE ALONG 2
 
-- Model died as a function of age, cancer, admit and uncons. Save the model as `m2`.
+- Model died as a function of age, admit and uncons. Save the model as `m2`.
 - Use `summary()` and `confint()` on the model
 - Interpret the coefficient for admit as an odds ratio
-- What's the predicted probability of dying for a person age 50 with cancer, Emergency admission, and unconscious?
+- What's the predicted probability of dying for a person age 50, Emergency admission, and unconscious?
 
 m2 <- glm(died ~ age + admit + uncons, data = icu, 
           family = binomial)

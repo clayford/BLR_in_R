@@ -132,7 +132,7 @@ Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or b
 Binary logistic regression produces a _model_ that we can use to make probability predictions or quantify relationships. For example, with the ICU data we might...
 
 - predict probability of death given age, sex, and whether you were unconscious at admission
-- determine how much the probability of dying increases (or decreases) if you were unconscious at admission
+- determine how the probability of dying changes if you were unconscious at admission
 
 _We are responsible for proposing and assessing the model._ For example, the "sex" variable may or may not help our model. We have to decide to include it or not. Subject matter expertise is just as important as statistical expertise.
 
@@ -242,14 +242,14 @@ Convert log odds of 2 to probability.
 
 ```{r}
 # inverse logit
-plogis(2)
+plogis(2.145)
 ```
 
-Convert probability of 0.8807971 to log odds.
+Convert probability of 0.8952006 to log odds.
 
 ```{r}
 # logit
-qlogis(0.8807971)
+qlogis(0.8952006)
 ```
 
 You probably don't need these functions when doing logistic regression in R, but they can be useful to know. 
@@ -570,7 +570,6 @@ predict_response(m3, terms = c("age[30:80]", "systolic[95, 130, 165]")) |>
 ```
 
 
-
 ## CODE ALONG 4
 
 - Fit a new model with the following formula and save as `m4`: 
@@ -580,11 +579,11 @@ predict_response(m3, terms = c("age[30:80]", "systolic[95, 130, 165]")) |>
 Add a new R code chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I* (Win/Linux) or *Cmd+Option+I* (Mac).
 
 
-## Influence and Diagnostic Plots
+## Checking influence of observations
 
 One or two influential observations can completely change a model. For example, a notable interaction may be due to an observation's unusual values. 
 
-An effective plot for quickly assessing influence is the `influencePlot()` function from {car} package. It plots three difference diagnostics:
+An effective plot for quickly assessing influence is the `influencePlot()` function from {car} package. It plots three different diagnostics:
 
 1. _residuals_ on y axis: how different is an observed response from its predicted response
 2. _Hat values_ on x axis: measures "leverage", potential impact of a case on the model
@@ -603,7 +602,11 @@ Now call `influencePlot()` on the model object. A plot is produced with "notewor
 infl <- influencePlot(m_all)
 ```
 
-Below are the exact values of the labeled points. A Cook's D bigger than 1 is the usual red flag. A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). Residuals larger than 2.5 may be of interest.
+Below are the exact values of the labeled points. 
+
+- A Cook's D bigger than 1 is the usual red flag. 
+- A Hat Value is considered large if it exceeds (2 or 3)(k/n) where k is the number of model coefficients and n is number of observations. Here that comes out to (2 or 3)(7/200) or about (0.07 - 0.11). 
+- Residuals larger than 2.5 may be of interest.
 
 ```{r}
 infl
